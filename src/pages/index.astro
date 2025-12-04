@@ -5,7 +5,7 @@
 
 import type { D1Database } from '@cloudflare/workers-types';
 
-// --- 后端逻辑保持不变 ---
+// --- 1. 后端逻辑 ---
 const runtime = Astro.locals.runtime;
 let db: D1Database | null = null;
 let errorMsg = "";
@@ -17,7 +17,7 @@ if (runtime && runtime.env && runtime.env.cpporigin) {
 
 if (db) {
 	try {
-		// 获取最新的 50 条
+		// 获取最新的 50 条数据
 		const result = await db.prepare(
 			"SELECT * FROM cpporigin ORDER BY key DESC LIMIT 50"
 		).all();
@@ -40,8 +40,8 @@ function formatTime(val: any) {
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>C++ Source Viewer</title>
 
-	<!-- 1. 引入 VS Code 风格的高亮主题 -->
-	<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-vsc-dark-plus.min.css" rel="stylesheet" />
+	<!-- 1. [修复] 使用 jsDelivr 引入 VS Code Dark Plus 主题 (解决 404 问题) -->
+	<link href="https://cdn.jsdelivr.net/npm/prism-themes@1.9.0/themes/prism-vsc-dark-plus.min.css" rel="stylesheet" />
 
 	<!-- 2. 引入代码格式化工具 (js-beautify) -->
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.7/beautify.min.js"></script>
@@ -52,6 +52,7 @@ function formatTime(val: any) {
 
 <main class="main-container">
 <h1 class="page-title">C++ Source Origins</h1>
+
 {errorMsg && <div class="error-msg">{errorMsg}</div>}
 
 	<div class="card-list">
@@ -64,14 +65,18 @@ function formatTime(val: any) {
 
 <div class="code-window">
 <!--
-   这里的逻辑是：
-   1. 把原始脏数据放在 hidden textarea 里
-   2. 页面加载后，JS 读取这个数据 -> 格式化 -> 放入 code 标签 -> 高亮
+   逻辑：
+   1. 原始数据存在 hidden textarea
+   2. JS 读取 -> 格式化 -> 写入 code -> 高亮
 -->
 <textarea id={`raw-code-${index}`} style="display:none;">
 {item.content || item.value || ""}
 </textarea>
 
+<!--
+     class="language-cpp" 用于 Prism 高亮
+     HTML 实体内容由下方的 JS 填充
+-->
 <pre><code id={`target-code-${index}`} class="language-cpp"></code></pre>
 </div>
 </article>
@@ -81,7 +86,7 @@ function formatTime(val: any) {
 <div class="footer-note">End of List</div>
 </main>
 
-<!-- 3. PrismJS 脚本 -->
+<!-- 3. PrismJS 核心与语言包 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js"></script>
@@ -89,7 +94,7 @@ function formatTime(val: any) {
 <!-- 4. 核心脚本：自动格式化代码 -->
 <script define:vars={{ dataList }}>
 document.addEventListener('DOMContentLoaded', () => {
-	// 遍历所有数据项
+	// 遍历数据
             dataList.forEach((_, index) => {
 		const rawElement = document.getElementById(`raw-code-${index}`);
 		const targetElement = document.getElementById(`target-code-${index}`);
@@ -97,18 +102,17 @@ document.addEventListener('DOMContentLoaded', () => {
 		if (rawElement && targetElement) {
 			let rawCode = rawElement.value.trim();
 
-			// 使用 js_beautify 进行格式化
-                    // 虽然它是为 JS 设计的，但对 C++ 这种类 C 语言效果也很好
+			// 使用 js_beautify 格式化 C++ 代码
                     let formattedCode = js_beautify(rawCode, {
 				indent_size: 4,
 				space_in_empty_paren: true,
-				brace_style: "collapse,preserve-inline" // 尝试保持大括号风格
-                    });
+				brace_style: "collapse,preserve-inline"
+			});
 
-			// 填充格式化后的代码
+			// 填充
                     targetElement.textContent = formattedCode;
 
-			// 手动触发 Prism 高亮
+			// 触发高亮
                     Prism.highlightElement(targetElement);
 		}
 	});
@@ -122,9 +126,8 @@ document.addEventListener('DOMContentLoaded', () => {
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-	/* 强制使用 VS Code 同款字体 */
 	font-family: Consolas, 'Courier New', monospace;
-	background-color: #1e1e1e; /* VS Dark 背景色 */
+	background-color: #1e1e1e;
 	color: #d4d4d4;
 	min-height: 100vh;
 }
@@ -136,7 +139,7 @@ body {
 	background-image: url('https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=2070&auto=format&fit=crop');
 	background-size: cover;
 	background-position: center;
-	background-color: rgba(30, 30, 30, 0.85); /* 很深的遮罩，模仿 IDE 环境 */
+	background-color: rgba(30, 30, 30, 0.85);
 	background-blend-mode: multiply;
 	filter: blur(4px);
 }
@@ -156,9 +159,14 @@ body {
 	letter-spacing: 1px;
 }
 
-/* === 仿 VS Code 窗口样式 === */
+.error-msg {
+	background: #5a1d1d; color: #fff; padding: 10px;
+	text-align: center; margin-bottom: 20px; border-radius: 4px;
+}
+
+/* === 仿 VS Code 窗口 === */
 .code-card {
-	background: #1e1e1e; /* 纯色背景，不透明，为了像 IDE */
+	background: #1e1e1e;
 	border: 1px solid #333;
 	border-radius: 6px;
 	margin-bottom: 40px;
@@ -167,7 +175,7 @@ body {
 }
 
 .card-header {
-	background: #252526; /* VS Code 标题栏颜色 */
+	background: #252526;
 	padding: 8px 15px;
 	display: flex;
 	justify-content: space-between;
@@ -176,31 +184,33 @@ body {
 	border-bottom: 1px solid #1e1e1e;
 }
 
-.id-tag { color: #4ec9b0; /* 类名颜色 */ font-weight: bold; }
+.id-tag { color: #4ec9b0; font-weight: bold; }
 .date-tag { color: #858585; }
 
 .code-window {
 	padding: 0;
 	max-height: 600px;
-	overflow: auto; /* 允许滚动 */
+	overflow: auto; /* 超出高度允许滚动 */
 }
 
-/* === PrismJS 样式覆盖 === */
-/* 这里的样式是为了让 Prism 完美贴合 VS Code 风格 */
+/* === PrismJS 样式覆盖与字体加粗 === */
 pre[class*="language-"] {
 	margin: 0 !important;
 	padding: 15px !important;
-	background: #1e1e1e !important; /* 编辑器背景 */
+	background: #1e1e1e !important;
 	text-shadow: none !important;
 
-	/*
-       这里使用 pre，因为我们已经格式化了代码。
-       如果一行太长，让它横向滚动（像真正的 IDE），
-       或者你可以改成 pre-wrap 强制换行。
-    */
+	/* 保持格式化后的缩进，长行允许横向滚动 */
 	white-space: pre !important;
+
 	font-size: 14px !important;
 	line-height: 1.5 !important;
+}
+
+/* [重点修改] 针对源码进行加粗 */
+code[class*="language-"], pre[class*="language-"] {
+	font-family: Consolas, 'Courier New', monospace !important;
+	font-weight: bold !important; /* <--- 这里实现了加粗 */
 }
 
 /* 滚动条仿 VS Code */
@@ -209,11 +219,5 @@ pre[class*="language-"] {
 .code-window::-webkit-scrollbar-thumb { background: #424242; }
 .code-window::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
 
-/* 强制字体 */
-code[class*="language-"], pre[class*="language-"] {
-	font-family: Consolas, 'Courier New', monospace !important;
-}
-
 .footer-note { text-align: center; color: #555; margin-top: 50px; font-size: 0.8rem; }
-.error-msg { background: #5a1d1d; color: #fff; padding: 10px; text-align: center; margin-bottom: 20px; }
 </style>
