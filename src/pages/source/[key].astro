@@ -21,10 +21,9 @@ if (runtime && runtime.env && runtime.env.cpporigin) {
 // 3. 根据 Key 查询详情
 if (db && key) {
     try {
-        // 使用 WHERE key = ? 进行精确查找
         item = await db.prepare("SELECT * FROM cpporigin WHERE key = ?").bind(key).first();
     } catch (e: any) {
-        errorMsg = "查询失败: " + e.message;
+        errorMsg = "Data retrieval failed: " + e.message;
     }
 }
 
@@ -39,60 +38,217 @@ function formatTime(val: any) {
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{key} - 源码详情</title>
+    <title>{key} | Origin Terminal</title>
+    <!-- 引入 JetBrains Mono 字体，提升代码阅读体验 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
 </head>
 <body>
 
-<div class="container">
+<!-- WebGL 画布背景 -->
+<canvas id="gl-canvas"></canvas>
 
-    <!-- 面包屑导航 -->
-    <nav class="breadcrumb">
-        <a href="/public">🏠 首页列表</a>
+<div class="main-wrapper">
+    <!-- 顶部导航 -->
+    <nav class="breadcrumb fade-in-down">
+        <a href="/" class="nav-item">
+            <span class="icon">⚡</span> ACCESS_LEVEL_0
+        </a>
         <span class="sep">/</span>
-        <span class="curr">{key}</span>
+        <span class="curr">SOURCE_VIEWER</span>
+        <span class="sep">/</span>
+        <span class="file-tag">{key}</span>
     </nav>
 
     <!-- 错误处理 -->
-    {errorMsg && <div class="alert-box">{errorMsg}</div>}
+    {errorMsg && <div class="alert-box error glitch-effect">{errorMsg}</div>}
 
     {!item && !errorMsg && (
-            <div class="alert-box">⚠️ 未找到文件：<strong>{key}</strong></div>
+            <div class="alert-box warning">
+                SYSTEM ALERT: FILE_NOT_FOUND [{key}]
+            </div>
     )}
 
     <!-- 源码详情卡片 -->
     {item && (
-            <main class="detail-card">
-                <div class="detail-header">
-                    <h1>{item.key}</h1>
-                    <div class="detail-meta">
-                        <span>File ID: {item.id}</span>
-                        <span>Created: {formatTime(item.created_at || item.date)}</span>
+            <main class="detail-card glass-panel fade-in-up">
+                <header class="detail-header">
+                    <div class="header-left">
+                        <h1 class="glow-text">{item.key}</h1>
+                        <div class="badges">
+                            <span class="badge id-badge">ID: {item.id}</span>
+                            <span class="badge lang-badge">CPP</span>
+                            <span class="badge size-badge">{item.value ? item.value.length : 0} BYTES</span>
+                        </div>
                     </div>
+                    <div class="header-right">
+                        <span class="time-stamp">DETECTED: {formatTime(item.created_at || item.date)}</span>
+                    </div>
+                </header>
+
+                <div class="code-container custom-scrollbar">
+                    <!-- 行号与代码 (视觉模拟) -->
+                    <pre><code id="source-code" class="language-cpp">{item.value || item.content}</code></pre>
                 </div>
 
-                <div class="code-content">
-                    <!-- 显示完整代码 -->
-                    <pre><code id="source-code">{item.value || item.content}</code></pre>
-                </div>
-
-                <div class="detail-footer">
-                    <button id="copy-btn" class="copy-btn">📋 复制全部代码</button>
-                </div>
+                <footer class="detail-footer">
+                    <div class="status-line">
+                        <span class="blink">_</span> TERMINAL_READY
+                    </div>
+                    <button id="copy-btn" class="cyber-btn">
+                        <span class="btn-content">COPY_BUFFER</span>
+                        <span class="glare"></span>
+                    </button>
+                </footer>
             </main>
     )}
-
 </div>
 
-<!-- 简单的复制脚本 -->
-<script>
+<!-- WebGL Shader Script -->
+<script is:inline>
+    // WebGL 初始化逻辑
+    const canvas = document.getElementById('gl-canvas');
+    const gl = canvas.getContext('webgl');
+
+    if (!gl) {
+        console.error('WebGL not supported');
+    } else {
+        // 顶点着色器 (Vertex Shader) - 简单的覆盖全屏
+        const vsSource = `
+            attribute vec4 aVertexPosition;
+            void main() {
+                gl_Position = aVertexPosition;
+            }
+        `;
+
+        // 片元着色器 (Fragment Shader) - "Ethereal Data Flow" 效果
+        const fsSource = `
+            precision mediump float;
+            uniform float uTime;
+            uniform vec2 uResolution;
+
+            // 伪随机函数
+            float random (in vec2 st) {
+                return fract(sin(dot(st.xy, vec2(12.9898,78.233)))*43758.5453123);
+            }
+
+            // 噪声函数
+            float noise (in vec2 st) {
+                vec2 i = floor(st);
+                vec2 f = fract(st);
+                float a = random(i);
+                float b = random(i + vec2(1.0, 0.0));
+                float c = random(i + vec2(0.0, 1.0));
+                float d = random(i + vec2(1.0, 1.0));
+                vec2 u = f * f * (3.0 - 2.0 * f);
+                return mix(a, b, u.x) + (c - a)* u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+            }
+
+            void main() {
+                vec2 uv = gl_FragCoord.xy / uResolution.xy;
+                uv.x *= uResolution.x / uResolution.y;
+                
+                // 动态坐标
+                vec2 pos = uv * 3.0;
+                float time = uTime * 0.2;
+                
+                // 创建流动的等高线效果
+                float n = noise(pos + vec2(time));
+                n += 0.5 * noise(pos * 2.0 - vec2(time * 0.5));
+                n += 0.25 * noise(pos * 4.0 + vec2(time * 0.2));
+                
+                // 颜色混合 (深蓝 -> 紫 -> 青)
+                vec3 color1 = vec3(0.05, 0.08, 0.15); // 深空黑蓝
+                vec3 color2 = vec3(0.1, 0.3, 0.5);    // 科技蓝
+                vec3 color3 = vec3(0.4, 0.1, 0.4);    // 赛博紫
+                
+                float mixVal = smoothstep(0.3, 0.7, n);
+                vec3 finalColor = mix(color1, color2, mixVal);
+                finalColor = mix(finalColor, color3, smoothstep(0.6, 0.9, n));
+                
+                // 添加细微的网格线叠加
+                float grid = step(0.98, fract(uv.x * 20.0)) + step(0.98, fract(uv.y * 20.0));
+                finalColor += vec3(grid * 0.03); // 非常淡的网格
+
+                gl_FragColor = vec4(finalColor, 1.0);
+            }
+        `;
+
+        // 编译 Shader
+        function initShaderProgram(gl, vsSource, fsSource) {
+            const vs = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+            const fs = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+            const shaderProgram = gl.createProgram();
+            gl.attachShader(shaderProgram, vs);
+            gl.attachShader(shaderProgram, fs);
+            gl.linkProgram(shaderProgram);
+            return shaderProgram;
+        }
+
+        function loadShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+
+        const program = initShaderProgram(gl, vsSource, fsSource);
+        const positionAttributeLocation = gl.getAttribLocation(program, "aVertexPosition");
+        const resolutionUniformLocation = gl.getUniformLocation(program, "uResolution");
+        const timeUniformLocation = gl.getUniformLocation(program, "uTime");
+
+        const positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        // 覆盖整个屏幕的两个三角形
+        const positions = [ -1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1 ];
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        function render(time) {
+            time *= 0.001; // 秒
+
+            gl.useProgram(program);
+            gl.enableVertexAttribArray(positionAttributeLocation);
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+
+            gl.uniform2f(resolutionUniformLocation, canvas.width, canvas.height);
+            gl.uniform1f(timeUniformLocation, time);
+
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            requestAnimationFrame(render);
+        }
+        requestAnimationFrame(render);
+    }
+
+    // 复制按钮逻辑
     const btn = document.getElementById('copy-btn');
     const codeBlock = document.getElementById('source-code');
+    const btnContent = document.querySelector('.btn-content');
 
     if(btn && codeBlock) {
         btn.addEventListener('click', () => {
             navigator.clipboard.writeText(codeBlock.innerText).then(() => {
-                btn.innerText = "✅ 已复制";
-                setTimeout(() => btn.innerText = "📋 复制全部代码", 2000);
+                const originalText = btnContent.innerText;
+                btnContent.innerText = "ACCESS_GRANTED (COPIED)";
+                btn.classList.add('success');
+                setTimeout(() => {
+                    btnContent.innerText = originalText;
+                    btn.classList.remove('success');
+                }, 2000);
             });
         });
     }
@@ -102,83 +258,250 @@ function formatTime(val: any) {
 </html>
 
 <style>
+    /* =========================================
+       CSS 核心变量与重置
+       ========================================= */
     :root {
-        --bg: #0d1117;
-        --card-bg: #161b22;
-        --border: #30363d;
-        --text: #c9d1d9;
-        --blue: #58a6ff;
-        --green: #238636;
+        --font-main: 'JetBrains Mono', 'Courier New', monospace;
+        --color-bg: #050505;
+        --color-glass: rgba(20, 25, 35, 0.65); /* 玻璃背景色 */
+        --color-border: rgba(255, 255, 255, 0.1);
+        --color-text: #e0e6ed;
+        --color-accent: #00f0ff; /* 赛博青 */
+        --color-secondary: #7000ff; /* 霓虹紫 */
+        --color-success: #00ff9d;
+        --blur-amount: 16px;
     }
+
+    * { box-sizing: border-box; }
 
     body {
-        background-color: var(--bg);
-        color: var(--text);
-        font-family: Consolas, monospace;
         margin: 0;
-        padding: 2rem 0;
+        padding: 0;
+        background-color: var(--color-bg);
+        color: var(--color-text);
+        font-family: var(--font-main);
+        overflow-x: hidden;
+        min-height: 100vh;
     }
 
-    .container { max-width: 1000px; margin: 0 auto; padding: 0 1rem; }
-
-    /* 导航样式 */
-    .breadcrumb { margin-bottom: 1.5rem; font-size: 1rem; }
-    .breadcrumb a { color: var(--blue); text-decoration: none; }
-    .breadcrumb a:hover { text-decoration: underline; }
-    .breadcrumb .sep { margin: 0 0.5rem; color: #8b949e; }
-    .breadcrumb .curr { color: #fff; font-weight: bold; }
-
-    /* 详情卡片 */
-    .detail-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        overflow: hidden;
+    /* WebGL Canvas 背景 */
+    #gl-canvas {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        z-index: -1;
     }
 
-    .detail-header {
-        background: #21262d;
-        padding: 1.5rem;
-        border-bottom: 1px solid var(--border);
+    .main-wrapper {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        min-height: 100vh;
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
     }
-    .detail-header h1 { margin: 0 0 0.5rem 0; color: #fff; font-size: 1.5rem; }
-    .detail-meta { color: #8b949e; font-size: 0.9rem; display: flex; gap: 1.5rem; }
 
-    /* 代码区域 */
-    .code-content {
-        background: #0d1117;
-        padding: 1.5rem;
-        overflow-x: auto;
-    }
-    .code-content pre { margin: 0; }
-    .code-content code { font-family: 'Courier New', Courier, monospace; line-height: 1.5; font-size: 0.95rem; }
-
-    /* 底部按钮 */
-    .detail-footer {
-        padding: 1rem;
-        border-top: 1px solid var(--border);
-        text-align: right;
-        background: #161b22;
-    }
-    .copy-btn {
-        background: var(--green);
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-family: inherit;
+    /* =========================================
+       导航栏
+       ========================================= */
+    .breadcrumb {
+        width: 90%;
+        max-width: 1600px;
+        margin-bottom: 2rem;
         font-size: 0.9rem;
-        transition: 0.2s;
+        letter-spacing: 1px;
+        color: rgba(255,255,255,0.6);
+        text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
-    .copy-btn:hover { background: #2ea043; }
+    .breadcrumb a {
+        color: var(--color-accent);
+        text-decoration: none;
+        transition: 0.3s;
+        border-bottom: 1px solid transparent;
+    }
+    .breadcrumb a:hover {
+        color: #fff;
+        text-shadow: 0 0 8px var(--color-accent);
+        border-bottom: 1px solid var(--color-accent);
+    }
+    .file-tag { color: #fff; font-weight: bold; }
+
+    /* =========================================
+       卡片容器 (Glassmorphism)
+       ========================================= */
+    .detail-card {
+        width: 95%; /* 更宽的视野 */
+        max-width: 1600px; /* 大屏幕上限制最大宽度 */
+        min-height: 70vh;
+        display: flex;
+        flex-direction: column;
+
+        /* 玻璃拟态核心代码 */
+        background: var(--color-glass);
+        backdrop-filter: blur(var(--blur-amount));
+        -webkit-backdrop-filter: blur(var(--blur-amount));
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.05);
+
+        overflow: hidden;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .detail-card:hover {
+        box-shadow: 0 30px 60px rgba(0,0,0,0.6), 0 0 20px rgba(0, 240, 255, 0.1);
+        border-color: rgba(0, 240, 255, 0.3);
+    }
+
+    /* =========================================
+       头部信息
+       ========================================= */
+    .detail-header {
+        padding: 1.5rem 2rem;
+        border-bottom: 1px solid var(--color-border);
+        background: rgba(0,0,0,0.2);
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .glow-text {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: #fff;
+        text-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+    }
+
+    .badges { display: flex; gap: 0.8rem; }
+    .badge {
+        font-size: 0.75rem;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+    .id-badge { background: rgba(255,255,255,0.1); color: #ccc; }
+    .lang-badge { background: rgba(0, 240, 255, 0.15); color: var(--color-accent); border: 1px solid rgba(0, 240, 255, 0.3); }
+    .size-badge { background: rgba(112, 0, 255, 0.15); color: #b98eff; border: 1px solid rgba(112, 0, 255, 0.3); }
+
+    .header-right { font-size: 0.8rem; color: rgba(255,255,255,0.5); font-family: var(--font-main); }
+
+    /* =========================================
+       代码显示区域 (重点优化)
+       ========================================= */
+    .code-container {
+        flex: 1;
+        padding: 2rem;
+        overflow: auto;
+        background: rgba(0,0,0,0.3); /* 深一点的背景增加对比度 */
+        position: relative;
+    }
+
+    pre { margin: 0; width: 100%; }
+
+    code {
+        font-family: var(--font-main);
+        font-size: 15px; /* 更大的字体 */
+        line-height: 1.6;
+        color: #d4d4d4;
+        display: block;
+        min-width: 100%; /* 确保代码不换行，支持横向滚动 */
+    }
+
+    /* 简单的语法高亮颜色模拟 (这里假设是 C++，做一些基础的颜色处理) */
+    /* 注意：如果不引入 PrismJS 等库，只能依赖纯 CSS 或后端处理。
+       这里为了性能保持原生，但通过字体和间距让它看起来很专业。 */
+
+    /* 自定义滚动条 */
+    .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(255,255,255,0.2);
+        border-radius: 5px;
+        border: 2px solid rgba(0,0,0,0);
+        background-clip: content-box;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: var(--color-accent); }
+
+    /* =========================================
+       底部控制栏
+       ========================================= */
+    .detail-footer {
+        padding: 1rem 2rem;
+        border-top: 1px solid var(--color-border);
+        background: rgba(0,0,0,0.2);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .status-line { font-size: 0.8rem; color: var(--color-success); opacity: 0.8; }
+    .blink { animation: blinker 1s linear infinite; }
+    @keyframes blinker { 50% { opacity: 0; } }
+
+    /* 赛博朋克按钮 */
+    .cyber-btn {
+        position: relative;
+        background: transparent;
+        color: var(--color-accent);
+        border: 1px solid var(--color-accent);
+        padding: 10px 24px;
+        font-family: var(--font-main);
+        font-weight: bold;
+        font-size: 0.9rem;
+        cursor: pointer;
+        overflow: hidden;
+        transition: 0.3s;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .cyber-btn:hover {
+        background: var(--color-accent);
+        color: #000;
+        box-shadow: 0 0 20px var(--color-accent);
+    }
+
+    .cyber-btn.success {
+        border-color: var(--color-success);
+        color: var(--color-success);
+        box-shadow: 0 0 20px rgba(0, 255, 157, 0.4);
+    }
+
+    /* 动画 */
+    .fade-in-down { animation: fadeInDown 0.8s ease-out; }
+    .fade-in-up { animation: fadeInUp 0.8s ease-out 0.2s backwards; }
+
+    @keyframes fadeInDown {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 响应式 */
+    @media (max-width: 768px) {
+        .detail-card { width: 100%; border-radius: 0; min-height: 100vh; border: none; }
+        .main-wrapper { padding: 0; }
+        .breadcrumb { margin: 1rem; }
+        .code-container { padding: 1rem; }
+        code { font-size: 13px; }
+    }
 
     .alert-box {
-        border: 1px solid #ff7b72;
-        color: #ff7b72;
-        padding: 1.5rem;
-        border-radius: 6px;
-        background: #3c1618;
-        text-align: center;
+        width: 90%; max-width: 1600px;
+        padding: 1rem; margin-bottom: 1rem;
+        border: 1px solid red; background: rgba(255,0,0,0.1); color: #ff5555;
     }
 </style>
