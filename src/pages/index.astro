@@ -5,34 +5,28 @@
 
 import type { D1Database } from '@cloudflare/workers-types';
 
-// 1. 初始化变量
+// --- 后端逻辑保持不变 ---
 const runtime = Astro.locals.runtime;
 let db: D1Database | null = null;
 let errorMsg = "";
 let dataList: any[] = [];
 
-// 2. 连接数据库
 if (runtime && runtime.env && runtime.env.cpporigin) {
 	db = runtime.env.cpporigin as D1Database;
 }
 
-// 3. 执行查询 (移除分页逻辑，直接查最新的 50 条或 100 条)
 if (db) {
 	try {
-		// 假设你要看最新的数据，按 key 倒序排列
-		// 如果想看全部，可以把 LIMIT 去掉，但建议保留以防数据太多炸浏览器
+		// 获取最新的 50 条
 		const result = await db.prepare(
 			"SELECT * FROM cpporigin ORDER BY key DESC LIMIT 50"
 		).all();
 		dataList = result.results;
 	} catch (e: any) {
-		errorMsg = "数据库查询出错: " + e.message;
+		errorMsg = "数据库错误: " + e.message;
 	}
-} else if (!runtime) {
-	errorMsg = "本地预览模式：未检测到 Cloudflare Runtime";
 }
 
-// 时间格式化工具
 function formatTime(val: any) {
 	if (!val) return '';
 	if (typeof val === 'number') return new Date(val * 1000).toISOString().split('T')[0];
@@ -45,80 +39,110 @@ function formatTime(val: any) {
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>C++ Source Viewer</title>
-	<!-- 代码高亮主题 -->
-	<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+
+	<!-- 1. 引入 VS Code 风格的高亮主题 -->
+	<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-vsc-dark-plus.min.css" rel="stylesheet" />
+
+	<!-- 2. 引入代码格式化工具 (js-beautify) -->
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.7/beautify.min.js"></script>
 </head>
 <body>
 
-<!-- 背景层 -->
 <div class="bg-image"></div>
 
 <main class="main-container">
-	<h1 class="page-title">C++ Source Origins</h1>
-
-	{errorMsg && <div class="error-msg">{errorMsg}</div>}
+<h1 class="page-title">C++ Source Origins</h1>
+{errorMsg && <div class="error-msg">{errorMsg}</div>}
 
 	<div class="card-list">
-		{dataList.map((item) => (
-			<article class="code-card">
-				<div class="card-header">
-					<span class="id-tag">#{item.key}</span>
-					<span class="date-tag">{formatTime(item.timestamp || item.created_at)}</span>
-				</div>
+{dataList.map((item, index) => (
+	<article class="code-card">
+	<div class="card-header">
+	<span class="id-tag">#{item.key}</span>
+	<span class="date-tag">{formatTime(item.timestamp || item.created_at)}</span>
+</div>
 
-				<!-- 代码显示区域 -->
-				<div class="code-wrapper">
-					<!-- language-cpp 用于高亮 -->
-					<pre><code class="language-cpp">{item.content || item.value || "// 无内容"}</code></pre>
-				</div>
-			</article>
-		))}
+<div class="code-window">
+<!--
+   这里的逻辑是：
+   1. 把原始脏数据放在 hidden textarea 里
+   2. 页面加载后，JS 读取这个数据 -> 格式化 -> 放入 code 标签 -> 高亮
+-->
+<textarea id={`raw-code-${index}`} style="display:none;">
+{item.content || item.value || ""}
+</textarea>
 
-		{dataList.length === 0 && !errorMsg && (
-			<div class="empty-tip">暂无数据</div>
-		)}
-	</div>
+<pre><code id={`target-code-${index}`} class="language-cpp"></code></pre>
+</div>
+</article>
+))}
+</div>
 
-	<!-- 底部简单的结束语，替代分页 -->
-	<div class="footer-note">End of List</div>
+<div class="footer-note">End of List</div>
 </main>
 
-<!-- PrismJS 脚本 -->
+<!-- 3. PrismJS 脚本 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js"></script>
+
+<!-- 4. 核心脚本：自动格式化代码 -->
+<script define:vars={{ dataList }}>
+document.addEventListener('DOMContentLoaded', () => {
+	// 遍历所有数据项
+            dataList.forEach((_, index) => {
+		const rawElement = document.getElementById(`raw-code-${index}`);
+		const targetElement = document.getElementById(`target-code-${index}`);
+
+		if (rawElement && targetElement) {
+			let rawCode = rawElement.value.trim();
+
+			// 使用 js_beautify 进行格式化
+                    // 虽然它是为 JS 设计的，但对 C++ 这种类 C 语言效果也很好
+                    let formattedCode = js_beautify(rawCode, {
+				indent_size: 4,
+				space_in_empty_paren: true,
+				brace_style: "collapse,preserve-inline" // 尝试保持大括号风格
+                    });
+
+			// 填充格式化后的代码
+                    targetElement.textContent = formattedCode;
+
+			// 手动触发 Prism 高亮
+                    Prism.highlightElement(targetElement);
+		}
+	});
+});
+</script>
 </body>
 </html>
 
 <style>
-/* === 全局样式 === */
+/* === 基础设置 === */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
+	/* 强制使用 VS Code 同款字体 */
 	font-family: Consolas, 'Courier New', monospace;
-	background-color: #0d1117;
-	color: #e6edf3;
+	background-color: #1e1e1e; /* VS Dark 背景色 */
+	color: #d4d4d4;
 	min-height: 100vh;
-	position: relative;
 }
 
-/* === 背景图 === */
 .bg-image {
 	position: fixed;
 	top: 0; left: 0; width: 100%; height: 100%;
 	z-index: -1;
-	/* 替换为你喜欢的背景图 */
 	background-image: url('https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=2070&auto=format&fit=crop');
 	background-size: cover;
 	background-position: center;
-	background-color: rgba(0, 0, 0, 0.7); /* 黑色遮罩 */
-	background-blend-mode: overlay;
-	filter: blur(3px); /* 背景模糊 */
+	background-color: rgba(30, 30, 30, 0.85); /* 很深的遮罩，模仿 IDE 环境 */
+	background-blend-mode: multiply;
+	filter: blur(4px);
 }
 
-/* === 容器布局 === */
 .main-container {
-	max-width: 900px;
+	max-width: 950px;
 	margin: 0 auto;
 	padding: 40px 20px;
 }
@@ -126,81 +150,70 @@ body {
 .page-title {
 	text-align: center;
 	margin-bottom: 40px;
-	font-size: 2.2rem;
+	font-size: 2rem;
 	color: #fff;
-	text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+	font-weight: normal;
+	letter-spacing: 1px;
 }
 
-.error-msg {
-	background: rgba(220, 38, 38, 0.8);
-	padding: 15px;
-	border-radius: 6px;
-	margin-bottom: 20px;
-	text-align: center;
-}
-
-/* === 卡片样式 === */
+/* === 仿 VS Code 窗口样式 === */
 .code-card {
-	background: rgba(22, 27, 34, 0.8);
-	backdrop-filter: blur(10px);
-	border: 1px solid rgba(255, 255, 255, 0.1);
-	border-radius: 10px;
-	margin-bottom: 30px;
+	background: #1e1e1e; /* 纯色背景，不透明，为了像 IDE */
+	border: 1px solid #333;
+	border-radius: 6px;
+	margin-bottom: 40px;
+	box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 	overflow: hidden;
-	box-shadow: 0 4px 15px rgba(0,0,0,0.5);
 }
 
 .card-header {
-	background: rgba(255, 255, 255, 0.05);
-	padding: 10px 15px;
-	border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+	background: #252526; /* VS Code 标题栏颜色 */
+	padding: 8px 15px;
 	display: flex;
 	justify-content: space-between;
-	color: #8b949e;
-	font-size: 0.9rem;
+	font-size: 0.85rem;
+	color: #cccccc;
+	border-bottom: 1px solid #1e1e1e;
 }
 
-.id-tag { color: #58a6ff; font-weight: bold; }
+.id-tag { color: #4ec9b0; /* 类名颜色 */ font-weight: bold; }
+.date-tag { color: #858585; }
 
-/* === 代码区域核心样式 (控制换行与滚动) === */
-.code-wrapper {
-	/* 限制最大高度，内容过多时出现垂直滚动条 */
-	max-height: 500px;
-	overflow-y: auto;
-	/* 禁止横向滚动 */
-	overflow-x: hidden;
+.code-window {
+	padding: 0;
+	max-height: 600px;
+	overflow: auto; /* 允许滚动 */
 }
 
-/* 强制 PrismJS 换行，覆盖默认的不换行行为 */
-.code-wrapper pre {
+/* === PrismJS 样式覆盖 === */
+/* 这里的样式是为了让 Prism 完美贴合 VS Code 风格 */
+pre[class*="language-"] {
 	margin: 0 !important;
 	padding: 15px !important;
-	background: transparent !important;
-
-	/* 核心代码：强制换行 */
-	white-space: pre-wrap !important;
-	word-wrap: break-word !important;
-	word-break: break-all !important;
-}
-
-.code-wrapper code {
-	font-family: 'JetBrains Mono', Consolas, monospace !important;
-	font-size: 14px;
-	line-height: 1.6; /* 增加行间距 */
+	background: #1e1e1e !important; /* 编辑器背景 */
 	text-shadow: none !important;
+
+	/*
+       这里使用 pre，因为我们已经格式化了代码。
+       如果一行太长，让它横向滚动（像真正的 IDE），
+       或者你可以改成 pre-wrap 强制换行。
+    */
+	white-space: pre !important;
+	font-size: 14px !important;
+	line-height: 1.5 !important;
 }
 
-/* === 滚动条美化 === */
-.code-wrapper::-webkit-scrollbar { width: 8px; }
-.code-wrapper::-webkit-scrollbar-track { background: transparent; }
-.code-wrapper::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
-.code-wrapper::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
+/* 滚动条仿 VS Code */
+.code-window::-webkit-scrollbar { width: 10px; height: 10px; }
+.code-window::-webkit-scrollbar-track { background: #1e1e1e; }
+.code-window::-webkit-scrollbar-thumb { background: #424242; }
+.code-window::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
 
-.footer-note {
-	text-align: center;
-	color: rgba(255,255,255,0.3);
-	margin-top: 40px;
-	font-size: 0.8rem;
+/* 强制字体 */
+code[class*="language-"], pre[class*="language-"] {
+	font-family: Consolas, 'Courier New', monospace !important;
 }
-.empty-tip { text-align: center; color: #888; padding: 20px; }
+
+.footer-note { text-align: center; color: #555; margin-top: 50px; font-size: 0.8rem; }
+.error-msg { background: #5a1d1d; color: #fff; padding: 10px; text-align: center; margin-bottom: 20px; }
 </style>
