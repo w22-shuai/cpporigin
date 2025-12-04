@@ -21,461 +21,377 @@ if (runtime && runtime.env) {
 
 // 3. 处理分页参数
 const page = parseInt(Astro.url.searchParams.get('page') || '1');
-const pageSize = 9; // 九宫格布局
+const pageSize = 10;
 const offset = (page - 1) * pageSize;
 
 // 4. 执行查询
 if (db) {
     try {
+        // 查询列表 (按 key 倒序，或者按 id 倒序)
         const result = await db.prepare(
             "SELECT * FROM cpporigin ORDER BY key DESC LIMIT ? OFFSET ?"
         ).bind(pageSize, offset).all();
+
         dataList = result.results;
 
+        // 查询总数
         const countRes = await db.prepare("SELECT COUNT(*) as count FROM cpporigin").first();
         totalCount = countRes?.count as number || 0;
+
     } catch (e: any) {
-        errorMsg = "Abyss Error: " + e.message;
+        errorMsg = "数据库查询出错: " + e.message;
     }
 } else {
     if (!runtime) {
-        errorMsg = "Local Mode: Cloudflare Runtime Missing";
+        errorMsg = "本地预览模式：未检测到 Cloudflare Runtime (请部署后测试)";
     } else {
-        errorMsg = "Connection Error: 'cpporigin' binding not found";
+        errorMsg = "错误：找不到名为 'cpporigin' 的数据库绑定";
     }
 }
 
-// 5. 分页逻辑
+// 5. 计算分页逻辑
 const totalPages = Math.ceil(totalCount / pageSize);
 const hasPrev = page > 1;
 const hasNext = page < totalPages;
 
-// 6. 辅助函数
+// 6. 辅助函数：时间格式化
 function formatTime(val: any) {
-    if (!val) return 'UNKNOWN';
+    if (!val) return '-';
     if (typeof val === 'number') return new Date(val * 1000).toISOString().split('T')[0];
     return val;
 }
 ---
 
-<html lang="zh-cn">
+<!DOCTYPE html>
+<html lang="zh-CN">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Origin | The Abyss</title>
-    <!-- 引入加粗的编程字体 -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ocean Data View</title>
+    <style>
+        /* ================= 基础重置 ================= */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden; /* 核心：禁止 Body 滚动，由内部容器接管，背景锁死 */
+            background-color: #006994; /* 兜底颜色 */
+            color: #1a2c38;
+        }
+
+        /* ================= WebGL 背景 ================= */
+        #gl-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1; /* 放在最底层 */
+        }
+
+        /* ================= 内容容器 (玻璃拟态) ================= */
+        .glass-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            overflow-y: auto; /* 内容溢出时，仅容器内部滚动，背景不动 */
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .content-card {
+            background: rgba(255, 255, 255, 0.65); /* 亮色半透明 */
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 20px;
+            padding: 40px;
+            width: 100%;
+            max-width: 1000px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            margin-bottom: 40px;
+        }
+
+        /* ================= 标题与排版 ================= */
+        h1 {
+            font-size: 3rem; /* 篇幅拉大：大标题 */
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 30px;
+            color: #004e6e;
+            text-shadow: 0 2px 4px rgba(255,255,255,0.8);
+            letter-spacing: 2px;
+        }
+
+        .error-box {
+            background: rgba(255, 80, 80, 0.2);
+            color: #8a0000;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        /* ================= 表格样式 ================= */
+        .data-table-wrapper {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 1.1rem;
+        }
+        th, td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid rgba(0, 78, 110, 0.1);
+        }
+        th {
+            background-color: rgba(0, 119, 182, 0.1);
+            color: #003f5c;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+        }
+        tr:hover td {
+            background-color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* ================= 分页按钮 ================= */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-top: 40px;
+        }
+        .btn {
+            text-decoration: none;
+            padding: 12px 30px;
+            border-radius: 30px;
+            background: linear-gradient(135deg, #48cae4 0%, #0077b6 100%);
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(0, 119, 182, 0.3);
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 119, 182, 0.5);
+        }
+        .btn.disabled {
+            background: #ccc;
+            pointer-events: none;
+            box-shadow: none;
+        }
+        .page-info {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #005f73;
+        }
+    </style>
 </head>
 <body>
 
-<!-- WebGL Background: The Deep Sea Mobius -->
-<canvas id="abyss-canvas"></canvas>
-<!-- 暗角遮罩，增加深邃感 -->
-<div class="vignette"></div>
+<!-- WebGL 画布：全屏背景 -->
+<canvas id="gl-canvas"></canvas>
 
-<div class="main-wrapper">
+<!-- 内容区域 -->
+<div class="glass-container">
+    <div class="content-card">
+        <h1>🌊 OCEAN DATABASE</h1>
 
-    <header class="ocean-header">
-        <div class="logo-area">
-            <h1>CPP_ORIGIN</h1>
-            <span class="subtitle">INFINITE LOOP // DEEP DIVE</span>
-        </div>
-        <div class="stats-area">
-            <div class="stat-pill">
-                <span class="dot {db ? 'online' : 'offline'}"></span>
-                {db ? "SYSTEM ONLINE" : "OFFLINE"}
-            </div>
-            <div class="stat-pill">
-                DEPTH: {totalCount} RECORDS
-            </div>
-        </div>
-    </header>
+        {errorMsg && <div class="error-box">{errorMsg}</div>}
 
-    <main class="content-container">
-
-        {errorMsg && <div class="error-banner">{errorMsg}</div>}
-
-        <div class="grid-layout">
-            {dataList.map((item) => (
-                    <article class="deep-card">
-                        <a href={`/source/${item.key}`} class="card-inner">
-                            <header class="card-top">
-                                <div class="file-icon"></div>
-                                <h3>{item.key}</h3>
-                            </header>
-
-                            <!-- 这里的代码预览：粗体 + 无滚动条 -->
-                            <div class="code-block">
-                                <pre><code>{(item.value || item.content || "").slice(0, 150)}...</code></pre>
-                            </div>
-
-                            <footer class="card-bottom">
-                                <span>ID_{item.id}</span>
-                                <span>{formatTime(item.created_at || item.date)}</span>
-                            </footer>
-                        </a>
-                    </article>
-            ))}
+        <div class="data-table-wrapper">
+            {dataList.length === 0 && !errorMsg ? (
+                    <p style="text-align:center; padding: 20px;">暂无数据</p>
+            ) : (
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>Key</th>
+                            <th>Value</th>
+                            <th>Created At</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {dataList.map((item) => (
+                                <tr>
+                                    <td><strong>{item.key}</strong></td>
+                                    <td>{item.val || item.value}</td>
+                                    <td>{formatTime(item.created_at)}</td>
+                                </tr>
+                        ))}
+                        </tbody>
+                    </table>
+            )}
         </div>
 
-        <!-- 空状态 -->
-        {dataList.length === 0 && !errorMsg && (
-                <div class="empty-state">
-                    <h2>THE VOID IS EMPTY</h2>
-                </div>
-        )}
-
-        <!-- 极简分页 -->
+        <!-- 分页 -->
         <div class="pagination">
-            <a href={hasPrev ? `?page=${page - 1}` : '#'} class={`page-btn ${!hasPrev ? 'disabled' : ''}`}>
-                PREV
-            </a>
-            <span class="page-info">{page} / {totalPages || 1}</span>
-            <a href={hasNext ? `?page=${page + 1}` : '#'} class={`page-btn ${!hasNext ? 'disabled' : ''}`}>
-                NEXT
-            </a>
+            <a href={`?page=${page - 1}`} class={`btn ${!hasPrev ? 'disabled' : ''}`}>← Prev</a>
+            <span class="page-info">Page {page} of {totalPages || 1}</span>
+            <a href={`?page=${page + 1}`} class={`btn ${!hasNext ? 'disabled' : ''}`}>Next →</a>
         </div>
-
-    </main>
+    </div>
 </div>
 
-<!-- WebGL Script: Raymarching Mobius Strip in Deep Sea -->
+<!-- WebGL 核心源码 -->
 <script is:inline>
-    const canvas = document.getElementById('abyss-canvas');
+    const canvas = document.getElementById('gl-canvas');
     const gl = canvas.getContext('webgl');
 
-    if (gl) {
-        const vsSource = `attribute vec4 p;void main(){gl_Position=p;}`;
+    if (!gl) {
+        console.error("WebGL not supported");
+    }
 
-        // Fragment Shader: 核心视觉逻辑
-        const fsSource = `
-			precision mediump float;
-			uniform float t; // Time
-			uniform vec2 r;  // Resolution
+    // 顶点着色器 (Vertex Shader) - 简单的全屏覆盖
+    const vsSource = `
+            attribute vec4 position;
+            void main() {
+                gl_Position = position;
+            }
+        `;
 
-			// 旋转矩阵
-			mat2 rot(float a) {
-				float c = cos(a), s = sin(a);
-				return mat2(c, -s, s, c);
-			}
+    // 片元着色器 (Fragment Shader) - 海洋与气泡逻辑
+    const fsSource = `
+            precision mediump float;
+            uniform float u_time;
+            uniform vec2 u_resolution;
 
-			// SDF: 莫比乌斯环 (扭曲环面近似)
-			float sdMobius(vec3 p) {
-				// 整体旋转
-				p.xz *= rot(t * 0.2);
-				p.yz *= rot(t * 0.1);
+            // 伪随机函数
+            float random (in vec2 st) {
+                return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+            }
 
-				// 扭曲逻辑
-				float angle = atan(p.z, p.x);
-				vec3 q = vec3(length(p.xz) - 2.5, p.y, 0.0);
-				
-				// 沿着环的路径扭曲坐标系
-				q.xy *= rot(angle * 0.5 + t * 0.5); 
-				
-				// 盒子形状形成带状
-				vec2 d = abs(q.xy) - vec2(0.6, 0.1); // 宽带子，薄厚度
-				return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
-			}
+            // 气泡绘制函数
+            float bubble(vec2 uv, float scale, float speed, float phase) {
+                // 向上移动
+                float t = u_time * speed;
+                uv.y += t;
+                
+                // 左右摇摆
+                uv.x += sin(t * 1.5 + phase) * 0.05;
 
-			// 场景距离函数
-			float map(vec3 p) {
-				return sdMobius(p);
-			}
+                // 网格化以生成多个气泡
+                vec2 grid = fract(uv * scale) - 0.5;
+                vec2 id = floor(uv * scale);
 
-			void main() {
-				vec2 uv = (gl_FragCoord.xy - 0.5 * r) / r.y;
-				
-				// 摄像机设置
-				vec3 ro = vec3(0.0, 0.0, -6.0); // 摄像机位置
-				vec3 rd = normalize(vec3(uv, 1.0)); // 射线方向
+                // 根据网格ID引入随机性
+                float rnd = random(id);
+                
+                // 仅在部分网格中生成气泡，增加稀疏感
+                if (rnd > 0.3) return 0.0; 
 
-				// Raymarching 循环
-				float d = 0.0, t_dist = 0.0;
-				int i_step = 0;
-				for(int i = 0; i < 64; i++) {
-					vec3 p = ro + rd * t_dist;
-					d = map(p);
-					if(d < 0.01 || t_dist > 20.0) break;
-					t_dist += d;
-					i_step = i;
-				}
+                float size = 0.1 + rnd * 0.2; // 随机大小
+                float dist = length(grid);
+                
+                // 气泡边缘光圈 (亮色)
+                float alpha = smoothstep(size, size - 0.02, dist);
+                
+                // 气泡高光
+                float highlight = smoothstep(size * 0.3, size * 0.1, length(grid - vec2(0.05, 0.05)));
+                
+                return alpha * 0.4 + highlight * 0.8;
+            }
 
-				// 基础颜色：深黑背景
-				vec3 col = vec3(0.01, 0.02, 0.05);
+            void main() {
+                vec2 uv = gl_FragCoord.xy / u_resolution.xy;
+                
+                // 1. 背景渐变 (亮色海洋：浅青 -> 深蓝)
+                vec3 colTop = vec3(0.0, 0.85, 0.95); // 顶部浅色
+                vec3 colBot = vec3(0.0, 0.4, 0.7);   // 底部深色
+                vec3 bg = mix(colBot, colTop, uv.y * 1.2);
 
-				// 如果击中物体
-				if(t_dist < 20.0) {
-					vec3 p = ro + rd * t_dist;
-					
-					// 简单的法线计算
-					vec2 e = vec2(0.01, 0.0);
-					vec3 n = normalize(vec3(
-						map(p + e.xyy) - map(p - e.xyy),
-						map(p + e.yxy) - map(p - e.yxy),
-						map(p + e.yyx) - map(p - e.yyx)
-					));
+                // 2. 水光波纹 (简单的正弦波叠加)
+                float waves = sin(uv.x * 10.0 + u_time) * 0.01 + sin(uv.y * 8.0 - u_time * 0.5) * 0.01;
+                bg += waves * 0.1;
 
-					// 灯光效果 (海蓝色)
-					vec3 lightPos = vec3(2.0, 5.0, -3.0);
-					vec3 l = normalize(lightPos - p);
-					float diff = max(dot(n, l), 0.1);
-					
-					// 颜色混合：物体本体是青蓝色，受光面亮一点
-					vec3 objCol = vec3(0.0, 0.2, 0.4); 
-					// 添加一点边缘光 (Rim Light) 增加通透感
-					float rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
-					
-					col = objCol * diff + vec3(0.0, 0.6, 0.8) * rim;
-				}
+                // 3. 气泡层 (多层叠加，产生景深感)
+                float bubbles = 0.0;
+                bubbles += bubble(uv, 4.0, 0.1, 0.0);   // 大气泡，慢
+                bubbles += bubble(uv, 8.0, 0.2, 2.0);   // 中气泡
+                bubbles += bubble(uv, 16.0, 0.35, 4.0); // 小气泡，快
 
-				// 氛围雾气 (制造深海感)
-				// 距离越远，颜色越接近深渊黑蓝
-				vec3 fogCol = vec3(0.01, 0.02, 0.04);
-				col = mix(col, fogCol, 1.0 - exp(-0.08 * t_dist * t_dist));
+                // 混合颜色，气泡为亮白色
+                vec3 finalColor = bg + vec3(1.0) * bubbles;
 
-				// 增加一点噪点防止色带
-				col += fract(sin(dot(uv, vec2(12.9, 78.2))) * 43758.5) * 0.02;
+                gl_FragColor = vec4(finalColor, 1.0);
+            }
+        `;
 
-				gl_FragColor = vec4(col, 1.0);
-			}
-		`;
+    // 编译着色器工具函数
+    function createShader(gl, type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            console.error(gl.getShaderInfoLog(shader));
+            gl.deleteShader(shader);
+            return null;
+        }
+        return shader;
+    }
 
-        const p = gl.createProgram();
-        const createShader = (type, src) => {
-            const s = gl.createShader(type);
-            gl.shaderSource(s, src);
-            gl.compileShader(s);
-            return s;
-        };
-        gl.attachShader(p, createShader(gl.VERTEX_SHADER, vsSource));
-        gl.attachShader(p, createShader(gl.FRAGMENT_SHADER, fsSource));
-        gl.linkProgram(p);
-        gl.useProgram(p);
+    // 创建程序
+    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vsSource);
+    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+    const program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
 
-        const buf = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), 35044);
-        const loc = gl.getAttribLocation(p, 'p');
-        gl.enableVertexAttribArray(loc);
-        gl.vertexAttribPointer(loc, 2, 5126, 0, 0, 0);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error(gl.getProgramInfoLog(program));
+    }
 
-        const ut = gl.getUniformLocation(p, 't');
-        const ur = gl.getUniformLocation(p, 'r');
+    // 设置全屏四边形
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    const positions = [
+        -1.0,  1.0,
+        1.0,  1.0,
+        -1.0, -1.0,
+        1.0, -1.0,
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
 
-        const render = (time) => {
-            gl.uniform1f(ut, time * 0.001);
-            gl.uniform2f(ur, canvas.width, canvas.height);
-            gl.drawArrays(5, 0, 4);
-            requestAnimationFrame(render);
-        };
+    const positionLocation = gl.getAttribLocation(program, "position");
+    gl.enableVertexAttribArray(positionLocation);
+    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
-        const resize = () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            gl.viewport(0, 0, canvas.width, canvas.height);
-        };
-        window.addEventListener('resize', resize);
-        resize();
+    gl.useProgram(program);
+
+    const uTimeLoc = gl.getUniformLocation(program, "u_time");
+    const uResLoc = gl.getUniformLocation(program, "u_resolution");
+
+    // 渲染循环
+    function render(time) {
+        time *= 0.001; // 秒
+
+        // 适配屏幕尺寸
+        const displayWidth = canvas.clientWidth;
+        const displayHeight = canvas.clientHeight;
+        if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+            canvas.width = displayWidth;
+            canvas.height = displayHeight;
+            gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+        }
+
+        gl.uniform2f(uResLoc, canvas.width, canvas.height);
+        gl.uniform1f(uTimeLoc, time);
+
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         requestAnimationFrame(render);
     }
-</script>
 
+    requestAnimationFrame(render);
+</script>
 </body>
 </html>
-
-<style>
-    /* =========================================
-       深海风格配色 (Deep Sea Palette)
-       ========================================= */
-    :root {
-        --font-main: 'JetBrains Mono', monospace;
-
-        /* 颜色定义 */
-        --bg-deep: #020408;  /* 极深的黑蓝 */
-        --glass-bg: rgba(5, 15, 30, 0.75); /* 深色磨砂 */
-        --glass-border: rgba(60, 100, 130, 0.2); /* 幽蓝边框 */
-
-        --text-main: #e0f0ff; /* 偏冷的白色 */
-        --text-muted: #5a7a9a; /* 灰蓝色 */
-
-        --accent-cyan: #00d2ff; /* 亮青色 */
-        --accent-glow: rgba(0, 210, 255, 0.15);
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-        margin: 0;
-        background: var(--bg-deep);
-        color: var(--text-main);
-        font-family: var(--font-main);
-        min-height: 100vh;
-        overflow-x: hidden;
-    }
-
-    a { text-decoration: none; color: inherit; }
-
-    /* WebGL Canvas */
-    #abyss-canvas {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        z-index: -2;
-    }
-    /* 暗角效果 (Vignette) */
-    .vignette {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: radial-gradient(circle at center, transparent 30%, #000 130%);
-        z-index: -1;
-        pointer-events: none;
-    }
-
-    .main-wrapper {
-        position: relative; z-index: 1;
-        display: flex; flex-direction: column;
-        min-height: 100vh;
-    }
-
-    .content-container {
-        width: 100%; max-width: 1200px;
-        margin: 0 auto; padding: 2rem;
-        flex: 1;
-    }
-
-    /* =========================================
-       Header
-       ========================================= */
-    .ocean-header {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 2rem 3rem;
-        border-bottom: 1px solid rgba(255,255,255,0.05);
-        background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
-    }
-
-    .logo-area h1 {
-        margin: 0; font-size: 2rem; letter-spacing: -1px;
-        background: linear-gradient(90deg, #fff, var(--accent-cyan));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-    .subtitle { font-size: 0.8rem; color: var(--text-muted); letter-spacing: 2px; }
-
-    .stats-area { display: flex; gap: 1rem; }
-    .stat-pill {
-        background: rgba(255,255,255,0.05);
-        padding: 6px 12px; border-radius: 20px;
-        font-size: 0.75rem; color: var(--text-muted);
-        display: flex; align-items: center; gap: 6px;
-        border: 1px solid transparent;
-    }
-    .dot { width: 8px; height: 8px; border-radius: 50%; }
-    .dot.online { background: #00ffaa; box-shadow: 0 0 8px #00ffaa; }
-    .dot.offline { background: #ff3333; }
-
-    /* =========================================
-       Grid Layout & Cards
-       ========================================= */
-    .grid-layout {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-        gap: 2rem;
-        margin-bottom: 4rem;
-    }
-
-    .deep-card {
-        position: relative;
-        transition: transform 0.3s ease;
-    }
-    .deep-card:hover { transform: translateY(-5px); }
-
-    .card-inner {
-        display: block;
-        background: var(--glass-bg);
-        backdrop-filter: blur(12px);
-        border: 1px solid var(--glass-border);
-        border-radius: 8px;
-        padding: 1.5rem;
-        height: 100%;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-        transition: 0.3s;
-        display: flex; flex-direction: column;
-    }
-
-    .deep-card:hover .card-inner {
-        border-color: var(--accent-cyan);
-        box-shadow: 0 10px 30px rgba(0, 210, 255, 0.1);
-        background: rgba(10, 25, 45, 0.85);
-    }
-
-    .card-top { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem; }
-    .file-icon {
-        width: 10px; height: 10px; background: var(--accent-cyan);
-        border-radius: 2px; box-shadow: 0 0 10px var(--accent-cyan);
-    }
-    .card-top h3 {
-        margin: 0; font-size: 1.1rem; color: #fff;
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-
-    /* 代码块样式：加粗 + 自动换行 */
-    .code-block {
-        flex: 1;
-        background: rgba(0,0,0,0.3);
-        padding: 1rem;
-        border-radius: 4px;
-        margin-bottom: 1rem;
-        border: 1px solid rgba(255,255,255,0.03);
-    }
-
-    .code-block pre {
-        margin: 0;
-        white-space: pre-wrap; /* 关键：自动换行 */
-        word-break: break-all; /* 关键：打断长单词 */
-    }
-
-    .code-block code {
-        font-family: var(--font-main);
-        font-size: 0.85rem;
-        line-height: 1.5;
-        color: #a0c0d0;
-        font-weight: 700; /* 关键：加粗 */
-    }
-
-    .card-bottom {
-        font-size: 0.75rem; color: var(--text-muted);
-        display: flex; justify-content: space-between;
-        padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.05);
-    }
-
-    /* =========================================
-       Pagination
-       ========================================= */
-    .pagination {
-        display: flex; justify-content: center; align-items: center; gap: 1.5rem;
-        margin-bottom: 3rem;
-    }
-    .page-btn {
-        padding: 10px 24px;
-        border: 1px solid var(--glass-border);
-        color: var(--accent-cyan);
-        border-radius: 30px;
-        background: rgba(0,0,0,0.3);
-        font-weight: bold;
-        font-size: 0.9rem;
-        transition: 0.3s;
-    }
-    .page-btn:hover:not(.disabled) {
-        background: var(--accent-cyan);
-        color: #000;
-        box-shadow: 0 0 15px var(--accent-cyan);
-    }
-    .page-btn.disabled { opacity: 0.3; cursor: default; }
-
-    .page-info { font-weight: bold; letter-spacing: 2px; }
-
-    .error-banner {
-        background: rgba(255, 50, 50, 0.1); border: 1px solid #ff3333;
-        color: #ff5555; padding: 1rem; margin-bottom: 2rem; text-align: center;
-    }
-    .empty-state { text-align: center; margin-top: 4rem; color: var(--text-muted); }
-</style>
