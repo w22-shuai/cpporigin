@@ -37,7 +37,7 @@ if (db) {
 		// 2. ORDER BY id DESC -> 按 ID 倒序（最新在前），如果你的表没 id 字段，改成 key 或 rowid
 		// 3. LIMIT ? OFFSET ? -> 分页
 		const result = await db.prepare(
-			"SELECT * FROM cpporigin ORDER BY id DESC LIMIT ? OFFSET ?"
+			"SELECT * FROM cpporigin ORDER BY key DESC LIMIT ? OFFSET ?"
 		).bind(pageSize, offset).all();
 
 		dataList = result.results;
