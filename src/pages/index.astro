@@ -5,59 +5,36 @@
 
 import type { D1Database } from '@cloudflare/workers-types';
 
-// 1. 初始化环境与变量
+// 1. 初始化变量
 const runtime = Astro.locals.runtime;
 let db: D1Database | null = null;
 let errorMsg = "";
 let dataList: any[] = [];
-let totalCount = 0;
 
-// 2. 连接 D1 数据库
-if (runtime && runtime.env) {
-	if (runtime.env.cpporigin) {
-		db = runtime.env.cpporigin as D1Database;
-	}
+// 2. 连接数据库
+if (runtime && runtime.env && runtime.env.cpporigin) {
+	db = runtime.env.cpporigin as D1Database;
 }
 
-// 3. 处理分页参数
-const page = parseInt(Astro.url.searchParams.get('page') || '1');
-const pageSize = 10;
-const offset = (page - 1) * pageSize;
-
-// 4. 执行查询
+// 3. 执行查询 (移除分页逻辑，直接查最新的 50 条或 100 条)
 if (db) {
 	try {
-		// 查询列表 (按 key 倒序，或者按 id 倒序)
+		// 假设你要看最新的数据，按 key 倒序排列
+		// 如果想看全部，可以把 LIMIT 去掉，但建议保留以防数据太多炸浏览器
 		const result = await db.prepare(
-			"SELECT * FROM cpporigin ORDER BY key DESC LIMIT ? OFFSET ?"
-		).bind(pageSize, offset).all();
-
+			"SELECT * FROM cpporigin ORDER BY key DESC LIMIT 50"
+		).all();
 		dataList = result.results;
-
-		// 查询总数
-		const countRes = await db.prepare("SELECT COUNT(*) as count FROM cpporigin").first();
-		totalCount = countRes?.count as number || 0;
-
 	} catch (e: any) {
 		errorMsg = "数据库查询出错: " + e.message;
 	}
-} else {
-	// 本地开发如果没有 mock D1，或者未部署，会提示这个
-	if (!runtime) {
-		errorMsg = "本地预览模式：未检测到 Cloudflare Runtime (请部署后测试)";
-	} else {
-		errorMsg = "错误：找不到名为 'cpporigin' 的数据库绑定";
-	}
+} else if (!runtime) {
+	errorMsg = "本地预览模式：未检测到 Cloudflare Runtime";
 }
 
-// 5. 计算分页逻辑
-const totalPages = Math.ceil(totalCount / pageSize);
-const hasPrev = page > 1;
-const hasNext = page < totalPages;
-
-// 6. 辅助函数：时间格式化
+// 时间格式化工具
 function formatTime(val: any) {
-	if (!val) return '-';
+	if (!val) return '';
 	if (typeof val === 'number') return new Date(val * 1000).toISOString().split('T')[0];
 	return val;
 }
@@ -67,123 +44,163 @@ function formatTime(val: any) {
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<title>C++ 源码库</title>
+	<title>C++ Source Viewer</title>
+	<!-- 代码高亮主题 -->
+	<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
 </head>
 <body>
 
-<header class="navbar">
-	<div class="container nav-inner">
-		<div class="brand">🧬 CPP<span>Origin</span></div>
-		<div class="status">{db ? "🟢 Online" : "🔴 Offline"}</div>
-	</div>
-</header>
+<!-- 背景层 -->
+<div class="bg-image"></div>
 
-<main class="container">
+<main class="main-container">
+	<h1 class="page-title">C++ Source Origins</h1>
 
-	<!-- 错误提示 -->
-	{errorMsg && <div class="alert-box">{errorMsg}</div>}
+	{errorMsg && <div class="error-msg">{errorMsg}</div>}
 
-	<!-- 列表展示 -->
-	<div class="repo-list">
+	<div class="card-list">
 		{dataList.map((item) => (
-			<div class="repo-card">
+			<article class="code-card">
 				<div class="card-header">
-					<div class="file-info">
-						<span class="icon">📄</span>
-						<!-- 核心修改：这里添加了跳转链接 -->
-						<h3>
-							<a href={`/source/${item.key}`} class="file-link">
-								{item.key || "Unknown_File"}
-							</a>
-						</h3>
-					</div>
-					<div class="file-meta">
-						<span>ID: {item.id}</span>
-						<span class="date">{formatTime(item.created_at || item.date)}</span>
-					</div>
+					<span class="id-tag">#{item.key}</span>
+					<span class="date-tag">{formatTime(item.timestamp || item.created_at)}</span>
 				</div>
 
-				<div class="code-preview">
-					<!-- 预览只显示前 200 个字符 -->
-					<pre><code>{(item.value || item.content || "").slice(0, 200)}...</code></pre>
+				<!-- 代码显示区域 -->
+				<div class="code-wrapper">
+					<!-- language-cpp 用于高亮 -->
+					<pre><code class="language-cpp">{item.content || item.value || "// 无内容"}</code></pre>
 				</div>
-			</div>
+			</article>
 		))}
+
+		{dataList.length === 0 && !errorMsg && (
+			<div class="empty-tip">暂无数据</div>
+		)}
 	</div>
 
-	<!-- 空状态 -->
-	{dataList.length === 0 && !errorMsg && (
-		<div class="empty-state">暂无数据</div>
-	)}
-
-	<!-- 分页导航 -->
-	<div class="pagination">
-		<a href={hasPrev ? `?page=${page - 1}` : '#'} class={`btn ${!hasPrev ? 'disabled' : ''}`}>上一页</a>
-		<span class="page-num">{page} / {totalPages || 1}</span>
-		<a href={hasNext ? `?page=${page + 1}` : '#'} class={`btn ${!hasNext ? 'disabled' : ''}`}>下一页</a>
-	</div>
-
+	<!-- 底部简单的结束语，替代分页 -->
+	<div class="footer-note">End of List</div>
 </main>
 
-<footer class="footer">Cloudflare D1 & Astro Demo</footer>
-
+<!-- PrismJS 脚本 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js"></script>
 </body>
 </html>
 
 <style>
-	/* 全局变量与重置 */
-	:root {
-		--bg: #0d1117;
-		--card-bg: #161b22;
-		--border: #30363d;
-		--text-main: #c9d1d9;
-		--text-muted: #8b949e;
-		--link: #58a6ff;
-		--btn-bg: #21262d;
-	}
-	body { background: var(--bg); color: var(--text-main); font-family: Consolas, monospace; margin: 0; }
-	a { text-decoration: none; }
+/* === 全局样式 === */
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-	.container { max-width: 900px; margin: 0 auto; padding: 0 1rem; }
+body {
+	font-family: Consolas, 'Courier New', monospace;
+	background-color: #0d1117;
+	color: #e6edf3;
+	min-height: 100vh;
+	position: relative;
+}
 
-	/* 顶部导航 */
-	.navbar { border-bottom: 1px solid var(--border); background: var(--card-bg); padding: 1rem 0; margin-bottom: 2rem; }
-	.nav-inner { display: flex; justify-content: space-between; align-items: center; }
-	.brand { font-size: 1.2rem; font-weight: bold; }
-	.brand span { color: var(--link); }
-	.status { font-size: 0.8rem; color: var(--text-muted); }
+/* === 背景图 === */
+.bg-image {
+	position: fixed;
+	top: 0; left: 0; width: 100%; height: 100%;
+	z-index: -1;
+	/* 替换为你喜欢的背景图 */
+	background-image: url('https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=2070&auto=format&fit=crop');
+	background-size: cover;
+	background-position: center;
+	background-color: rgba(0, 0, 0, 0.7); /* 黑色遮罩 */
+	background-blend-mode: overlay;
+	filter: blur(3px); /* 背景模糊 */
+}
 
-	/* 列表卡片 */
-	.repo-list { display: flex; flex-direction: column; gap: 1rem; }
-	.repo-card { border: 1px solid var(--border); border-radius: 6px; background: var(--card-bg); overflow: hidden; }
+/* === 容器布局 === */
+.main-container {
+	max-width: 900px;
+	margin: 0 auto;
+	padding: 40px 20px;
+}
 
-	.card-header {
-		padding: 0.8rem 1rem;
-		border-bottom: 1px solid var(--border);
-		background: #21262d;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
+.page-title {
+	text-align: center;
+	margin-bottom: 40px;
+	font-size: 2.2rem;
+	color: #fff;
+	text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+}
 
-	.file-info h3 { margin: 0; display: inline; font-size: 1rem; }
-	.file-link { color: var(--link); font-weight: 600; }
-	.file-link:hover { text-decoration: underline; color: #79c0ff; }
-	.icon { margin-right: 0.5rem; }
+.error-msg {
+	background: rgba(220, 38, 38, 0.8);
+	padding: 15px;
+	border-radius: 6px;
+	margin-bottom: 20px;
+	text-align: center;
+}
 
-	.file-meta { font-size: 0.8rem; color: var(--text-muted); display: flex; gap: 1rem; }
+/* === 卡片样式 === */
+.code-card {
+	background: rgba(22, 27, 34, 0.8);
+	backdrop-filter: blur(10px);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 10px;
+	margin-bottom: 30px;
+	overflow: hidden;
+	box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
 
-	/* 代码预览区 */
-	.code-preview { padding: 1rem; background: #0d1117; font-size: 0.85rem; color: var(--text-muted); }
-	.code-preview pre { margin: 0; white-space: pre-wrap; word-break: break-all; }
+.card-header {
+	background: rgba(255, 255, 255, 0.05);
+	padding: 10px 15px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+	display: flex;
+	justify-content: space-between;
+	color: #8b949e;
+	font-size: 0.9rem;
+}
 
-	/* 分页 */
-	.pagination { display: flex; justify-content: center; gap: 1rem; margin: 2rem 0; align-items: center; }
-	.btn { padding: 5px 15px; border: 1px solid var(--border); color: var(--link); border-radius: 6px; background: var(--btn-bg); transition: 0.2s; }
-	.btn:hover:not(.disabled) { background: #30363d; }
-	.btn.disabled { opacity: 0.5; cursor: not-allowed; color: var(--text-muted); }
+.id-tag { color: #58a6ff; font-weight: bold; }
 
-	.alert-box { border: 1px solid #ff7b72; color: #ff7b72; padding: 1rem; border-radius: 6px; margin-bottom: 1rem; }
-	.empty-state, .footer { text-align: center; color: var(--text-muted); padding: 2rem; }
-	.footer { border-top: 1px solid var(--border); font-size: 0.8rem; }
+/* === 代码区域核心样式 (控制换行与滚动) === */
+.code-wrapper {
+	/* 限制最大高度，内容过多时出现垂直滚动条 */
+	max-height: 500px;
+	overflow-y: auto;
+	/* 禁止横向滚动 */
+	overflow-x: hidden;
+}
+
+/* 强制 PrismJS 换行，覆盖默认的不换行行为 */
+.code-wrapper pre {
+	margin: 0 !important;
+	padding: 15px !important;
+	background: transparent !important;
+
+	/* 核心代码：强制换行 */
+	white-space: pre-wrap !important;
+	word-wrap: break-word !important;
+	word-break: break-all !important;
+}
+
+.code-wrapper code {
+	font-family: 'JetBrains Mono', Consolas, monospace !important;
+	font-size: 14px;
+	line-height: 1.6; /* 增加行间距 */
+	text-shadow: none !important;
+}
+
+/* === 滚动条美化 === */
+.code-wrapper::-webkit-scrollbar { width: 8px; }
+.code-wrapper::-webkit-scrollbar-track { background: transparent; }
+.code-wrapper::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+.code-wrapper::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
+
+.footer-note {
+	text-align: center;
+	color: rgba(255,255,255,0.3);
+	margin-top: 40px;
+	font-size: 0.8rem;
+}
+.empty-tip { text-align: center; color: #888; padding: 20px; }
 </style>
