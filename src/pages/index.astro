@@ -10,6 +10,12 @@ const runtime = Astro.locals.runtime;
 let db: D1Database | null = null;
 let errorMsg = "";
 let dataList: any[] = [];
+let totalCount = 0;
+
+// 获取分页参数
+const page = parseInt(Astro.url.searchParams.get('page') || '1');
+const pageSize = 10;
+const offset = (page - 1) * pageSize;
 
 if (runtime && runtime.env && runtime.env.cpporigin) {
 	db = runtime.env.cpporigin as D1Database;
@@ -17,15 +23,22 @@ if (runtime && runtime.env && runtime.env.cpporigin) {
 
 if (db) {
 	try {
-		// 获取最新的 50 条数据
 		const result = await db.prepare(
-			"SELECT * FROM cpporigin ORDER BY key DESC LIMIT 50"
-		).all();
+			"SELECT * FROM cpporigin ORDER BY key DESC LIMIT ? OFFSET ?"
+		).bind(pageSize, offset).all();
 		dataList = result.results;
+
+		const countRes = await db.prepare("SELECT COUNT(*) as count FROM cpporigin").first();
+		totalCount = countRes?.count as number || 0;
+
 	} catch (e: any) {
 		errorMsg = "数据库错误: " + e.message;
 	}
 }
+
+const totalPages = Math.ceil(totalCount / pageSize);
+const hasPrev = page > 1;
+const hasNext = page < totalPages;
 
 function formatTime(val: any) {
 	if (!val) return '';
@@ -40,11 +53,12 @@ function formatTime(val: any) {
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>C++ Source Viewer</title>
 
-	<!-- 1. [修复] 使用 jsDelivr 引入 VS Code Dark Plus 主题 (解决 404 问题) -->
+	<!-- 1. CSS 主题 (VS Code Dark Plus) -->
 	<link href="https://cdn.jsdelivr.net/npm/prism-themes@1.9.0/themes/prism-vsc-dark-plus.min.css" rel="stylesheet" />
 
-	<!-- 2. 引入代码格式化工具 (js-beautify) -->
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.7/beautify.min.js"></script>
+	<!-- 2. JS Beautify (格式化工具) -->
+	<!-- 注意：这里加了 is:inline 确保它不被 Astro 延迟 -->
+	<script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.7/beautify.min.js"></script>
 </head>
 <body>
 
@@ -64,37 +78,48 @@ function formatTime(val: any) {
 </div>
 
 <div class="code-window">
-<!--
-   逻辑：
-   1. 原始数据存在 hidden textarea
-   2. JS 读取 -> 格式化 -> 写入 code -> 高亮
--->
 <textarea id={`raw-code-${index}`} style="display:none;">
 {item.content || item.value || ""}
 </textarea>
-
-<!--
-     class="language-cpp" 用于 Prism 高亮
-     HTML 实体内容由下方的 JS 填充
--->
+<!-- 这里的 language-cpp 会触发 Autoloader 自动下载 C++ 包 -->
 <pre><code id={`target-code-${index}`} class="language-cpp"></code></pre>
 </div>
 </article>
 ))}
-</div>
 
-<div class="footer-note">End of List</div>
-</main>
+{dataList.length === 0 && !errorMsg && (
+	<div class="empty-tip">暂无数据</div>
+	)}
+	</div>
 
-<!-- 3. PrismJS 核心与语言包 -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-cpp.min.js"></script>
+	<div class="pagination">
+{hasPrev ? <a href={`?page=${page - 1}`} class="page-btn">← 上一页</a> : <span class="page-btn disabled">← 上一页</span>}
+	<span class="page-info">第 {page} / {totalPages || 1} 页</span>
+{hasNext ? <a href={`?page=${page + 1}`} class="page-btn">下一页 →</a> : <span class="page-btn disabled">下一页 →</span>}
+	</div>
+	</main>
 
-<!-- 4. 核心脚本：自动格式化代码 -->
-<script define:vars={{ dataList }}>
+	<!-- ======================================================= -->
+	<!-- [关键修复] 脚本区域 -->
+	<!-- 1. is:inline 确保脚本按顺序立即执行，不经过 Astro 打包 -->
+	<!-- 2. 使用 prism-autoloader 自动解决依赖顺序问题 -->
+	<!-- ======================================================= -->
+
+	<!-- Prism 核心 -->
+	<script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+
+	<!-- Prism 自动加载器 (它会自动去下载 C 和 C++ 语言包，不用手动引了) -->
+	<script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+	<!-- 你的自定义脚本 -->
+	<script is:inline define:vars={{ dataList }}>
 document.addEventListener('DOMContentLoaded', () => {
-	// 遍历数据
+	// 配置 Autoloader 的路径 (虽然通常它能自动识别，但为了保险起见)
+            if (window.Prism && window.Prism.plugins.autoloader) {
+		window.Prism.plugins.autoloader.languages_path = 'https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/';
+	}
+
+	// 处理格式化
             dataList.forEach((_, index) => {
 		const rawElement = document.getElementById(`raw-code-${index}`);
 		const targetElement = document.getElementById(`target-code-${index}`);
@@ -102,18 +127,23 @@ document.addEventListener('DOMContentLoaded', () => {
 		if (rawElement && targetElement) {
 			let rawCode = rawElement.value.trim();
 
-			// 使用 js_beautify 格式化 C++ 代码
-                    let formattedCode = js_beautify(rawCode, {
-				indent_size: 4,
-				space_in_empty_paren: true,
-				brace_style: "collapse,preserve-inline"
-			});
+			// 格式化代码
+                    if (typeof js_beautify !== 'undefined') {
+				let formattedCode = js_beautify(rawCode, {
+					indent_size: 4,
+					space_in_empty_paren: true,
+					brace_style: "collapse,preserve-inline"
+				});
+				targetElement.textContent = formattedCode;
+			} else {
+				// 如果 beautify 加载失败，至少显示原始内容
+                        targetElement.textContent = rawCode;
+			}
 
-			// 填充
-                    targetElement.textContent = formattedCode;
-
-			// 触发高亮
-                    Prism.highlightElement(targetElement);
+			// 通知 Prism 高亮这个元素
+                    if (window.Prism) {
+				Prism.highlightElement(targetElement);
+			}
 		}
 	});
 });
@@ -122,7 +152,8 @@ document.addEventListener('DOMContentLoaded', () => {
 </html>
 
 <style>
-/* === 基础设置 === */
+/* ... 保持之前的 CSS 不变，复制下面的即可 ... */
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
@@ -163,8 +194,8 @@ body {
 	background: #5a1d1d; color: #fff; padding: 10px;
 	text-align: center; margin-bottom: 20px; border-radius: 4px;
 }
+.empty-tip { text-align: center; padding: 20px; color: #888; }
 
-/* === 仿 VS Code 窗口 === */
 .code-card {
 	background: #1e1e1e;
 	border: 1px solid #333;
@@ -190,34 +221,66 @@ body {
 .code-window {
 	padding: 0;
 	max-height: 600px;
-	overflow: auto; /* 超出高度允许滚动 */
+	overflow: auto;
 }
 
-/* === PrismJS 样式覆盖与字体加粗 === */
 pre[class*="language-"] {
 	margin: 0 !important;
 	padding: 15px !important;
 	background: #1e1e1e !important;
 	text-shadow: none !important;
-
-	/* 保持格式化后的缩进，长行允许横向滚动 */
 	white-space: pre !important;
-
 	font-size: 14px !important;
 	line-height: 1.5 !important;
 }
 
-/* [重点修改] 针对源码进行加粗 */
 code[class*="language-"], pre[class*="language-"] {
 	font-family: Consolas, 'Courier New', monospace !important;
-	font-weight: bold !important; /* <--- 这里实现了加粗 */
+	font-weight: bold !important;
 }
 
-/* 滚动条仿 VS Code */
 .code-window::-webkit-scrollbar { width: 10px; height: 10px; }
 .code-window::-webkit-scrollbar-track { background: #1e1e1e; }
 .code-window::-webkit-scrollbar-thumb { background: #424242; }
 .code-window::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
 
-.footer-note { text-align: center; color: #555; margin-top: 50px; font-size: 0.8rem; }
+.pagination {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	gap: 20px;
+	margin-top: 40px;
+	margin-bottom: 60px;
+	color: #ccc;
+}
+
+.page-btn {
+	display: inline-block;
+	padding: 8px 16px;
+	background-color: #2d2d30;
+	color: #fff;
+	text-decoration: none;
+	border: 1px solid #3e3e42;
+	border-radius: 2px;
+	font-size: 0.9rem;
+	transition: background 0.2s;
+}
+
+.page-btn:hover {
+	background-color: #3e3e42;
+	border-color: #555;
+}
+
+.page-btn.disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	pointer-events: none;
+	background-color: #252526;
+	border-color: #333;
+}
+
+.page-info {
+	font-size: 0.9rem;
+	color: #858585;
+}
 </style>
