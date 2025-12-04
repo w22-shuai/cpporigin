@@ -1,50 +1,320 @@
 ---
-import BaseHead from '../components/BaseHead.astro';
-import Header from '../components/Header.astro';
-import Footer from '../components/Footer.astro';
-import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
+// ==========================================
+// 1. 后端逻辑 (Server Side)
+// ==========================================
+
+const db = Astro.locals.runtime.env.cpporigin;
+
+// 获取页码
+const page = parseInt(Astro.url.searchParams.get('page') || '1');
+const pageSize = 10;
+const offset = (page - 1) * pageSize;
+
+// 定义数据结构
+// 【注意】如果你数据库的列名还是 key/value，请把下面的 title 改为 key，content 改为 value
+type SourceCode = {
+	id: number;
+	title: string;   // 对应文件名或 Key
+	content: string; // 对应 C++ 源码
+	created_at: number;
+};
+
+let codes: SourceCode[] = [];
+let totalCount = 0;
+let errorMessage = "";
+
+try {
+	// 查询列表
+	// 假设你还是用 created_at 排序。如果是旧表，记得改回 ORDER BY key
+	const result = await db.prepare(
+		"SELECT * FROM cpporigin ORDER BY key DESC LIMIT ? OFFSET ?"
+	).bind(pageSize, offset).all();
+
+	codes = result.results as unknown as SourceCode[];
+
+	// 查询总数
+	const countResult = await db.prepare("SELECT COUNT(*) as count FROM cpporigin").first();
+	totalCount = countResult.count as number;
+
+} catch (e: any) {
+	errorMessage = "查询错误: " + e.message;
+}
+
+// 分页计算
+const totalPages = Math.ceil(totalCount / pageSize);
+const hasPrev = page > 1;
+const hasNext = page < totalPages;
+
+// 简单的日期
+function formatDate(timestamp: number) {
+	if (!timestamp) return '';
+	return new Date(timestamp * 1000).toISOString().split('T')[0]; // 显示为 YYYY-MM-DD
+}
 ---
 
-<!doctype html>
-<html lang="en">
-	<head>
-		<BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
-	</head>
-	<body>
-		<Header />
-		<main>
-			<h1>🧑‍🚀 Hello, Astronaut!</h1>
-			<p>
-				Welcome to the official <a href="https://astro.build/">Astro</a> blog starter template. This
-				template serves as a lightweight, minimally-styled starting point for anyone looking to build
-				a personal website, blog, or portfolio with Astro.
-			</p>
-			<p>
-				This template comes with a few integrations already configured in your
-				<code>astro.config.mjs</code> file. You can customize your setup with
-				<a href="https://astro.build/integrations">Astro Integrations</a> to add tools like Tailwind,
-				React, or Vue to your project.
-			</p>
-			<p>Here are a few ideas on how to get started with the template:</p>
-			<ul>
-				<li>Edit this page in <code>src/pages/index.astro</code></li>
-				<li>Edit the site header items in <code>src/components/Header.astro</code></li>
-				<li>Add your name to the footer in <code>src/components/Footer.astro</code></li>
-				<li>Check out the included blog posts in <code>src/content/blog/</code></li>
-				<li>Customize the blog post page layout in <code>src/layouts/BlogPost.astro</code></li>
-			</ul>
-			<p>
-				Have fun! If you get stuck, remember to <a href="https://docs.astro.build/"
-					>read the docs
-				</a> or <a href="https://astro.build/chat">join us on Discord</a> to ask questions.
-			</p>
-			<p>
-				Looking for a blog template with a bit more personality? Check out <a
-					href="https://github.com/Charca/astro-blog-template"
-					>astro-blog-template
-				</a> by <a href="https://twitter.com/Charca">Maxi Ferreira</a>.
-			</p>
-		</main>
-		<Footer />
-	</body>
+<!-- ========================================== -->
+<!-- 2. 前端界面 (HTML) -->
+<!-- ========================================== -->
+
+<html lang="zh-cn">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>C++ 源码库</title>
+</head>
+<body>
+
+<header class="navbar">
+	<div class="container nav-content">
+		<div class="brand">
+			<span class="icon">💻</span> CPP<span>Origin</span>
+		</div>
+		<div class="stats">
+			共收录 {totalCount} 个文件
+		</div>
+	</div>
+</header>
+
+<main class="container">
+
+	<!-- 错误提示 -->
+	{errorMessage && (
+		<div class="alert error">
+			⚠️ {errorMessage}
+		</div>
+	)}
+
+	<!-- 代码列表 -->
+	<div class="code-list">
+		{codes.map((item) => (
+			<div class="code-card">
+				<div class="card-header">
+					<div class="file-info">
+						<span class="file-icon">📄</span>
+						<h2 class="file-name">{item.title || "Unknown.cpp"}</h2>
+					</div>
+					<span class="file-date">{formatDate(item.created_at)}</span>
+				</div>
+
+				<div class="code-preview">
+					{/* pre 标签保留代码格式，只显示前5行作为预览 */}
+					<pre><code>{item.content ? item.content.substring(0, 200) + '...' : '// 空文件'}</code></pre>
+				</div>
+
+				<div class="card-footer">
+					<span class="lang-tag">C++</span>
+					<!-- 这里的链接只是示例，需要你创建 /post/[id].astro 来显示详情 -->
+					<a href={`/post/${item.id}`} class="view-btn">查看完整源码</a>
+				</div>
+			</div>
+		))}
+	</div>
+
+	<!-- 空状态 -->
+	{codes.length === 0 && !errorMessage && (
+		<div class="empty-state">
+			<code>404 Not Found: Database is empty.</code>
+		</div>
+	)}
+
+	<!-- 分页 -->
+	<div class="pagination">
+		<a href={hasPrev ? `?page=${page - 1}` : '#'} class={`btn ${!hasPrev ? 'disabled' : ''}`}>
+			&lt; Prev
+		</a>
+		<span class="page-num">{page} / {totalPages || 1}</span>
+		<a href={hasNext ? `?page=${page + 1}` : '#'} class={`btn ${!hasNext ? 'disabled' : ''}`}>
+			Next &gt;
+		</a>
+	</div>
+
+</main>
+
+<footer class="footer">
+	<p>CPP Source Query System &bull; Powered by Cloudflare D1</p>
+</footer>
+
+</body>
 </html>
+
+<!-- ========================================== -->
+<!-- 3. 样式 (CSS) -->
+<!-- ========================================== -->
+<style>
+	:root {
+		--bg-body: #0d1117;       /* GitHub 暗色背景 */
+		--bg-card: #161b22;       /* 卡片深色 */
+		--border: #30363d;        /* 边框色 */
+		--text-main: #c9d1d9;     /* 文字灰白 */
+		--text-muted: #8b949e;    /* 弱文字 */
+		--accent: #58a6ff;        /* 链接蓝 */
+		--code-bg: #0d1117;       /* 代码块背景 */
+	}
+
+	body {
+		background-color: var(--bg-body);
+		color: var(--text-main);
+		font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+		margin: 0;
+	}
+
+	/* 容器 */
+	.container {
+		max-width: 900px;
+		margin: 0 auto;
+		padding: 0 1rem;
+	}
+
+	/* 顶部导航 */
+	.navbar {
+		background: var(--bg-card);
+		border-bottom: 1px solid var(--border);
+		padding: 1rem 0;
+		margin-bottom: 2rem;
+	}
+	.nav-content {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+	.brand {
+		font-size: 1.5rem;
+		font-weight: bold;
+		color: var(--text-main);
+		font-family: monospace;
+	}
+	.brand span { color: var(--accent); }
+	.stats {
+		font-size: 0.9rem;
+		color: var(--text-muted);
+		font-family: monospace;
+	}
+
+	/* 列表布局 */
+	.code-list {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	/* 代码卡片 */
+	.code-card {
+		background: var(--bg-card);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		overflow: hidden;
+	}
+
+	.card-header {
+		padding: 0.8rem 1rem;
+		background: #21262d; /* 稍微亮一点 */
+		border-bottom: 1px solid var(--border);
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+	.file-info {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.file-name {
+		margin: 0;
+		font-size: 1rem;
+		font-family: monospace; /* 文件名用等宽字体 */
+		color: var(--accent);
+	}
+	.file-date {
+		font-size: 0.8rem;
+		color: var(--text-muted);
+	}
+
+	/* 代码预览区 */
+	.code-preview {
+		padding: 1rem;
+		background: var(--code-bg);
+		overflow-x: auto;
+	}
+	.code-preview pre {
+		margin: 0;
+	}
+	.code-preview code {
+		font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+		font-size: 0.9rem;
+		color: var(--text-muted);
+		line-height: 1.5;
+	}
+
+	/* 卡片底部 */
+	.card-footer {
+		padding: 0.8rem 1rem;
+		border-top: 1px solid var(--border);
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+	.lang-tag {
+		font-size: 0.75rem;
+		color: var(--text-muted);
+		border: 1px solid var(--border);
+		padding: 2px 8px;
+		border-radius: 10px;
+	}
+	.view-btn {
+		font-size: 0.9rem;
+		color: var(--text-main);
+		text-decoration: none;
+		background: #21262d;
+		padding: 5px 12px;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		transition: 0.2s;
+	}
+	.view-btn:hover {
+		background: #30363d;
+		border-color: #8b949e;
+	}
+
+	/* 分页按钮 */
+	.pagination {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		margin: 2rem 0;
+		gap: 1rem;
+	}
+	.btn {
+		background: var(--bg-card);
+		border: 1px solid var(--border);
+		color: var(--accent);
+		padding: 0.5rem 1rem;
+		border-radius: 6px;
+		text-decoration: none;
+	}
+	.btn:hover:not(.disabled) { background: #21262d; }
+	.btn.disabled { color: var(--text-muted); pointer-events: none; opacity: 0.5; }
+	.page-num { font-family: monospace; color: var(--text-main); }
+
+	/* 错误与空状态 */
+	.alert.error {
+		background: #3c1618;
+		color: #ff7b72;
+		padding: 1rem;
+		border: 1px solid #ff7b72;
+		border-radius: 6px;
+		margin-bottom: 1rem;
+	}
+	.empty-state {
+		text-align: center;
+		padding: 4rem;
+		color: var(--text-muted);
+	}
+	.footer {
+		text-align: center;
+		padding: 2rem;
+		color: var(--text-muted);
+		font-size: 0.8rem;
+		border-top: 1px solid var(--border);
+		margin-top: 2rem;
+	}
+</style>
