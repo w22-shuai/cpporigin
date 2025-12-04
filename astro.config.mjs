@@ -9,6 +9,7 @@ import cloudflare from "@astrojs/cloudflare";
 export default defineConfig({
 	site: "https://example.com",
 	integrations: [mdx(), sitemap()],
+	output: 'server', // 必须有这一行
 	adapter: cloudflare({
 		platformProxy: {
 			enabled: true,
