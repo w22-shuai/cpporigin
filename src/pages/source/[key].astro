@@ -1,34 +1,58 @@
 ---
 // ==========================================
-// 文件路径: src/pages/source/[key].astro
+// 文件路径: src/pages/index.astro
 // ==========================================
 
 import type { D1Database } from '@cloudflare/workers-types';
 
-// 1. 获取 URL 参数
-const { key } = Astro.params;
-
-// 2. 初始化数据库
+// 1. 初始化环境与变量
 const runtime = Astro.locals.runtime;
 let db: D1Database | null = null;
-let item: any = null;
 let errorMsg = "";
+let dataList: any[] = [];
+let totalCount = 0;
 
-if (runtime && runtime.env && runtime.env.cpporigin) {
-    db = runtime.env.cpporigin as D1Database;
-}
-
-// 3. 根据 Key 查询详情
-if (db && key) {
-    try {
-        item = await db.prepare("SELECT * FROM cpporigin WHERE key = ?").bind(key).first();
-    } catch (e: any) {
-        errorMsg = "Data retrieval failed: " + e.message;
+// 2. 连接 D1 数据库
+if (runtime && runtime.env) {
+    if (runtime.env.cpporigin) {
+        db = runtime.env.cpporigin as D1Database;
     }
 }
 
-// 4. 辅助函数
+// 3. 处理分页参数
+const page = parseInt(Astro.url.searchParams.get('page') || '1');
+const pageSize = 9; // 九宫格布局
+const offset = (page - 1) * pageSize;
+
+// 4. 执行查询
+if (db) {
+    try {
+        const result = await db.prepare(
+            "SELECT * FROM cpporigin ORDER BY key DESC LIMIT ? OFFSET ?"
+        ).bind(pageSize, offset).all();
+        dataList = result.results;
+
+        const countRes = await db.prepare("SELECT COUNT(*) as count FROM cpporigin").first();
+        totalCount = countRes?.count as number || 0;
+    } catch (e: any) {
+        errorMsg = "Abyss Error: " + e.message;
+    }
+} else {
+    if (!runtime) {
+        errorMsg = "Local Mode: Cloudflare Runtime Missing";
+    } else {
+        errorMsg = "Connection Error: 'cpporigin' binding not found";
+    }
+}
+
+// 5. 分页逻辑
+const totalPages = Math.ceil(totalCount / pageSize);
+const hasPrev = page > 1;
+const hasNext = page < totalPages;
+
+// 6. 辅助函数
 function formatTime(val: any) {
+    if (!val) return 'UNKNOWN';
     if (typeof val === 'number') return new Date(val * 1000).toISOString().split('T')[0];
     return val;
 }
@@ -38,219 +62,223 @@ function formatTime(val: any) {
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{key} | Origin Terminal</title>
-    <!-- 引入 JetBrains Mono 字体，提升代码阅读体验 -->
+    <title>Origin | The Abyss</title>
+    <!-- 引入加粗的编程字体 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
 
-<!-- WebGL 画布背景 -->
-<canvas id="gl-canvas"></canvas>
+<!-- WebGL Background: The Deep Sea Mobius -->
+<canvas id="abyss-canvas"></canvas>
+<!-- 暗角遮罩，增加深邃感 -->
+<div class="vignette"></div>
 
 <div class="main-wrapper">
-    <!-- 顶部导航 -->
-    <nav class="breadcrumb fade-in-down">
-        <a href="/" class="nav-item">
-            <span class="icon">⚡</span> ACCESS_LEVEL_0
-        </a>
-        <span class="sep">/</span>
-        <span class="curr">SOURCE_VIEWER</span>
-        <span class="sep">/</span>
-        <span class="file-tag">{key}</span>
-    </nav>
 
-    <!-- 错误处理 -->
-    {errorMsg && <div class="alert-box error glitch-effect">{errorMsg}</div>}
-
-    {!item && !errorMsg && (
-            <div class="alert-box warning">
-                SYSTEM ALERT: FILE_NOT_FOUND [{key}]
+    <header class="ocean-header">
+        <div class="logo-area">
+            <h1>CPP_ORIGIN</h1>
+            <span class="subtitle">INFINITE LOOP // DEEP DIVE</span>
+        </div>
+        <div class="stats-area">
+            <div class="stat-pill">
+                <span class="dot {db ? 'online' : 'offline'}"></span>
+                {db ? "SYSTEM ONLINE" : "OFFLINE"}
             </div>
-    )}
+            <div class="stat-pill">
+                DEPTH: {totalCount} RECORDS
+            </div>
+        </div>
+    </header>
 
-    <!-- 源码详情卡片 -->
-    {item && (
-            <main class="detail-card glass-panel fade-in-up">
-                <header class="detail-header">
-                    <div class="header-left">
-                        <h1 class="glow-text">{item.key}</h1>
-                        <div class="badges">
-                            <span class="badge id-badge">ID: {item.id}</span>
-                            <span class="badge lang-badge">CPP</span>
-                            <span class="badge size-badge">{item.value ? item.value.length : 0} BYTES</span>
-                        </div>
-                    </div>
-                    <div class="header-right">
-                        <span class="time-stamp">DETECTED: {formatTime(item.created_at || item.date)}</span>
-                    </div>
-                </header>
+    <main class="content-container">
 
-                <div class="code-container custom-scrollbar">
-                    <!-- 行号与代码 (视觉模拟) -->
-                    <pre><code id="source-code" class="language-cpp">{item.value || item.content}</code></pre>
+        {errorMsg && <div class="error-banner">{errorMsg}</div>}
+
+        <div class="grid-layout">
+            {dataList.map((item) => (
+                    <article class="deep-card">
+                        <a href={`/source/${item.key}`} class="card-inner">
+                            <header class="card-top">
+                                <div class="file-icon"></div>
+                                <h3>{item.key}</h3>
+                            </header>
+
+                            <!-- 这里的代码预览：粗体 + 无滚动条 -->
+                            <div class="code-block">
+                                <pre><code>{(item.value || item.content || "").slice(0, 150)}...</code></pre>
+                            </div>
+
+                            <footer class="card-bottom">
+                                <span>ID_{item.id}</span>
+                                <span>{formatTime(item.created_at || item.date)}</span>
+                            </footer>
+                        </a>
+                    </article>
+            ))}
+        </div>
+
+        <!-- 空状态 -->
+        {dataList.length === 0 && !errorMsg && (
+                <div class="empty-state">
+                    <h2>THE VOID IS EMPTY</h2>
                 </div>
+        )}
 
-                <footer class="detail-footer">
-                    <div class="status-line">
-                        <span class="blink">_</span> TERMINAL_READY
-                    </div>
-                    <button id="copy-btn" class="cyber-btn">
-                        <span class="btn-content">COPY_BUFFER</span>
-                        <span class="glare"></span>
-                    </button>
-                </footer>
-            </main>
-    )}
+        <!-- 极简分页 -->
+        <div class="pagination">
+            <a href={hasPrev ? `?page=${page - 1}` : '#'} class={`page-btn ${!hasPrev ? 'disabled' : ''}`}>
+                PREV
+            </a>
+            <span class="page-info">{page} / {totalPages || 1}</span>
+            <a href={hasNext ? `?page=${page + 1}` : '#'} class={`page-btn ${!hasNext ? 'disabled' : ''}`}>
+                NEXT
+            </a>
+        </div>
+
+    </main>
 </div>
 
-<!-- WebGL Shader Script -->
+<!-- WebGL Script: Raymarching Mobius Strip in Deep Sea -->
 <script is:inline>
-    // WebGL 初始化逻辑
-    const canvas = document.getElementById('gl-canvas');
+    const canvas = document.getElementById('abyss-canvas');
     const gl = canvas.getContext('webgl');
 
-    if (!gl) {
-        console.error('WebGL not supported');
-    } else {
-        // 顶点着色器 (Vertex Shader) - 简单的覆盖全屏
-        const vsSource = `
-            attribute vec4 aVertexPosition;
-            void main() {
-                gl_Position = aVertexPosition;
-            }
-        `;
+    if (gl) {
+        const vsSource = `attribute vec4 p;void main(){gl_Position=p;}`;
 
-        // 片元着色器 (Fragment Shader) - "Ethereal Data Flow" 效果
+        // Fragment Shader: 核心视觉逻辑
         const fsSource = `
-            precision mediump float;
-            uniform float uTime;
-            uniform vec2 uResolution;
+			precision mediump float;
+			uniform float t; // Time
+			uniform vec2 r;  // Resolution
 
-            // 伪随机函数
-            float random (in vec2 st) {
-                return fract(sin(dot(st.xy, vec2(12.9898,78.233)))*43758.5453123);
-            }
+			// 旋转矩阵
+			mat2 rot(float a) {
+				float c = cos(a), s = sin(a);
+				return mat2(c, -s, s, c);
+			}
 
-            // 噪声函数
-            float noise (in vec2 st) {
-                vec2 i = floor(st);
-                vec2 f = fract(st);
-                float a = random(i);
-                float b = random(i + vec2(1.0, 0.0));
-                float c = random(i + vec2(0.0, 1.0));
-                float d = random(i + vec2(1.0, 1.0));
-                vec2 u = f * f * (3.0 - 2.0 * f);
-                return mix(a, b, u.x) + (c - a)* u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
-            }
+			// SDF: 莫比乌斯环 (扭曲环面近似)
+			float sdMobius(vec3 p) {
+				// 整体旋转
+				p.xz *= rot(t * 0.2);
+				p.yz *= rot(t * 0.1);
 
-            void main() {
-                vec2 uv = gl_FragCoord.xy / uResolution.xy;
-                uv.x *= uResolution.x / uResolution.y;
-                
-                // 动态坐标
-                vec2 pos = uv * 3.0;
-                float time = uTime * 0.2;
-                
-                // 创建流动的等高线效果
-                float n = noise(pos + vec2(time));
-                n += 0.5 * noise(pos * 2.0 - vec2(time * 0.5));
-                n += 0.25 * noise(pos * 4.0 + vec2(time * 0.2));
-                
-                // 颜色混合 (深蓝 -> 紫 -> 青)
-                vec3 color1 = vec3(0.05, 0.08, 0.15); // 深空黑蓝
-                vec3 color2 = vec3(0.1, 0.3, 0.5);    // 科技蓝
-                vec3 color3 = vec3(0.4, 0.1, 0.4);    // 赛博紫
-                
-                float mixVal = smoothstep(0.3, 0.7, n);
-                vec3 finalColor = mix(color1, color2, mixVal);
-                finalColor = mix(finalColor, color3, smoothstep(0.6, 0.9, n));
-                
-                // 添加细微的网格线叠加
-                float grid = step(0.98, fract(uv.x * 20.0)) + step(0.98, fract(uv.y * 20.0));
-                finalColor += vec3(grid * 0.03); // 非常淡的网格
+				// 扭曲逻辑
+				float angle = atan(p.z, p.x);
+				vec3 q = vec3(length(p.xz) - 2.5, p.y, 0.0);
+				
+				// 沿着环的路径扭曲坐标系
+				q.xy *= rot(angle * 0.5 + t * 0.5); 
+				
+				// 盒子形状形成带状
+				vec2 d = abs(q.xy) - vec2(0.6, 0.1); // 宽带子，薄厚度
+				return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+			}
 
-                gl_FragColor = vec4(finalColor, 1.0);
-            }
-        `;
+			// 场景距离函数
+			float map(vec3 p) {
+				return sdMobius(p);
+			}
 
-        // 编译 Shader
-        function initShaderProgram(gl, vsSource, fsSource) {
-            const vs = loadShader(gl, gl.VERTEX_SHADER, vsSource);
-            const fs = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
-            const shaderProgram = gl.createProgram();
-            gl.attachShader(shaderProgram, vs);
-            gl.attachShader(shaderProgram, fs);
-            gl.linkProgram(shaderProgram);
-            return shaderProgram;
-        }
+			void main() {
+				vec2 uv = (gl_FragCoord.xy - 0.5 * r) / r.y;
+				
+				// 摄像机设置
+				vec3 ro = vec3(0.0, 0.0, -6.0); // 摄像机位置
+				vec3 rd = normalize(vec3(uv, 1.0)); // 射线方向
 
-        function loadShader(gl, type, source) {
-            const shader = gl.createShader(type);
-            gl.shaderSource(shader, source);
-            gl.compileShader(shader);
-            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-                console.error(gl.getShaderInfoLog(shader));
-                gl.deleteShader(shader);
-                return null;
-            }
-            return shader;
-        }
+				// Raymarching 循环
+				float d = 0.0, t_dist = 0.0;
+				int i_step = 0;
+				for(int i = 0; i < 64; i++) {
+					vec3 p = ro + rd * t_dist;
+					d = map(p);
+					if(d < 0.01 || t_dist > 20.0) break;
+					t_dist += d;
+					i_step = i;
+				}
 
-        const program = initShaderProgram(gl, vsSource, fsSource);
-        const positionAttributeLocation = gl.getAttribLocation(program, "aVertexPosition");
-        const resolutionUniformLocation = gl.getUniformLocation(program, "uResolution");
-        const timeUniformLocation = gl.getUniformLocation(program, "uTime");
+				// 基础颜色：深黑背景
+				vec3 col = vec3(0.01, 0.02, 0.05);
 
-        const positionBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        // 覆盖整个屏幕的两个三角形
-        const positions = [ -1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1 ];
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+				// 如果击中物体
+				if(t_dist < 20.0) {
+					vec3 p = ro + rd * t_dist;
+					
+					// 简单的法线计算
+					vec2 e = vec2(0.01, 0.0);
+					vec3 n = normalize(vec3(
+						map(p + e.xyy) - map(p - e.xyy),
+						map(p + e.yxy) - map(p - e.yxy),
+						map(p + e.yyx) - map(p - e.yyx)
+					));
 
-        function resize() {
+					// 灯光效果 (海蓝色)
+					vec3 lightPos = vec3(2.0, 5.0, -3.0);
+					vec3 l = normalize(lightPos - p);
+					float diff = max(dot(n, l), 0.1);
+					
+					// 颜色混合：物体本体是青蓝色，受光面亮一点
+					vec3 objCol = vec3(0.0, 0.2, 0.4); 
+					// 添加一点边缘光 (Rim Light) 增加通透感
+					float rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
+					
+					col = objCol * diff + vec3(0.0, 0.6, 0.8) * rim;
+				}
+
+				// 氛围雾气 (制造深海感)
+				// 距离越远，颜色越接近深渊黑蓝
+				vec3 fogCol = vec3(0.01, 0.02, 0.04);
+				col = mix(col, fogCol, 1.0 - exp(-0.08 * t_dist * t_dist));
+
+				// 增加一点噪点防止色带
+				col += fract(sin(dot(uv, vec2(12.9, 78.2))) * 43758.5) * 0.02;
+
+				gl_FragColor = vec4(col, 1.0);
+			}
+		`;
+
+        const p = gl.createProgram();
+        const createShader = (type, src) => {
+            const s = gl.createShader(type);
+            gl.shaderSource(s, src);
+            gl.compileShader(s);
+            return s;
+        };
+        gl.attachShader(p, createShader(gl.VERTEX_SHADER, vsSource));
+        gl.attachShader(p, createShader(gl.FRAGMENT_SHADER, fsSource));
+        gl.linkProgram(p);
+        gl.useProgram(p);
+
+        const buf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), 35044);
+        const loc = gl.getAttribLocation(p, 'p');
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc, 2, 5126, 0, 0, 0);
+
+        const ut = gl.getUniformLocation(p, 't');
+        const ur = gl.getUniformLocation(p, 'r');
+
+        const render = (time) => {
+            gl.uniform1f(ut, time * 0.001);
+            gl.uniform2f(ur, canvas.width, canvas.height);
+            gl.drawArrays(5, 0, 4);
+            requestAnimationFrame(render);
+        };
+
+        const resize = () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
             gl.viewport(0, 0, canvas.width, canvas.height);
-        }
+        };
         window.addEventListener('resize', resize);
         resize();
-
-        function render(time) {
-            time *= 0.001; // 秒
-
-            gl.useProgram(program);
-            gl.enableVertexAttribArray(positionAttributeLocation);
-            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-            gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
-
-            gl.uniform2f(resolutionUniformLocation, canvas.width, canvas.height);
-            gl.uniform1f(timeUniformLocation, time);
-
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
-            requestAnimationFrame(render);
-        }
         requestAnimationFrame(render);
-    }
-
-    // 复制按钮逻辑
-    const btn = document.getElementById('copy-btn');
-    const codeBlock = document.getElementById('source-code');
-    const btnContent = document.querySelector('.btn-content');
-
-    if(btn && codeBlock) {
-        btn.addEventListener('click', () => {
-            navigator.clipboard.writeText(codeBlock.innerText).then(() => {
-                const originalText = btnContent.innerText;
-                btnContent.innerText = "ACCESS_GRANTED (COPIED)";
-                btn.classList.add('success');
-                setTimeout(() => {
-                    btnContent.innerText = originalText;
-                    btn.classList.remove('success');
-                }, 2000);
-            });
-        });
     }
 </script>
 
@@ -259,249 +287,195 @@ function formatTime(val: any) {
 
 <style>
     /* =========================================
-       CSS 核心变量与重置
+       深海风格配色 (Deep Sea Palette)
        ========================================= */
     :root {
-        --font-main: 'JetBrains Mono', 'Courier New', monospace;
-        --color-bg: #050505;
-        --color-glass: rgba(20, 25, 35, 0.65); /* 玻璃背景色 */
-        --color-border: rgba(255, 255, 255, 0.1);
-        --color-text: #e0e6ed;
-        --color-accent: #00f0ff; /* 赛博青 */
-        --color-secondary: #7000ff; /* 霓虹紫 */
-        --color-success: #00ff9d;
-        --blur-amount: 16px;
+        --font-main: 'JetBrains Mono', monospace;
+
+        /* 颜色定义 */
+        --bg-deep: #020408;  /* 极深的黑蓝 */
+        --glass-bg: rgba(5, 15, 30, 0.75); /* 深色磨砂 */
+        --glass-border: rgba(60, 100, 130, 0.2); /* 幽蓝边框 */
+
+        --text-main: #e0f0ff; /* 偏冷的白色 */
+        --text-muted: #5a7a9a; /* 灰蓝色 */
+
+        --accent-cyan: #00d2ff; /* 亮青色 */
+        --accent-glow: rgba(0, 210, 255, 0.15);
     }
 
     * { box-sizing: border-box; }
 
     body {
         margin: 0;
-        padding: 0;
-        background-color: var(--color-bg);
-        color: var(--color-text);
+        background: var(--bg-deep);
+        color: var(--text-main);
         font-family: var(--font-main);
-        overflow-x: hidden;
         min-height: 100vh;
+        overflow-x: hidden;
     }
 
-    /* WebGL Canvas 背景 */
-    #gl-canvas {
-        position: fixed;
-        top: 0; left: 0;
-        width: 100vw; height: 100vh;
+    a { text-decoration: none; color: inherit; }
+
+    /* WebGL Canvas */
+    #abyss-canvas {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: -2;
+    }
+    /* 暗角效果 (Vignette) */
+    .vignette {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: radial-gradient(circle at center, transparent 30%, #000 130%);
         z-index: -1;
+        pointer-events: none;
     }
 
     .main-wrapper {
-        position: relative;
-        z-index: 1;
-        width: 100%;
+        position: relative; z-index: 1;
+        display: flex; flex-direction: column;
         min-height: 100vh;
-        padding: 2rem;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
     }
 
-    /* =========================================
-       导航栏
-       ========================================= */
-    .breadcrumb {
-        width: 90%;
-        max-width: 1600px;
-        margin-bottom: 2rem;
-        font-size: 0.9rem;
-        letter-spacing: 1px;
-        color: rgba(255,255,255,0.6);
-        text-transform: uppercase;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    .breadcrumb a {
-        color: var(--color-accent);
-        text-decoration: none;
-        transition: 0.3s;
-        border-bottom: 1px solid transparent;
-    }
-    .breadcrumb a:hover {
-        color: #fff;
-        text-shadow: 0 0 8px var(--color-accent);
-        border-bottom: 1px solid var(--color-accent);
-    }
-    .file-tag { color: #fff; font-weight: bold; }
-
-    /* =========================================
-       卡片容器 (Glassmorphism)
-       ========================================= */
-    .detail-card {
-        width: 95%; /* 更宽的视野 */
-        max-width: 1600px; /* 大屏幕上限制最大宽度 */
-        min-height: 70vh;
-        display: flex;
-        flex-direction: column;
-
-        /* 玻璃拟态核心代码 */
-        background: var(--color-glass);
-        backdrop-filter: blur(var(--blur-amount));
-        -webkit-backdrop-filter: blur(var(--blur-amount));
-        border: 1px solid var(--color-border);
-        border-radius: 12px;
-        box-shadow: 0 20px 50px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.05);
-
-        overflow: hidden;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-
-    .detail-card:hover {
-        box-shadow: 0 30px 60px rgba(0,0,0,0.6), 0 0 20px rgba(0, 240, 255, 0.1);
-        border-color: rgba(0, 240, 255, 0.3);
-    }
-
-    /* =========================================
-       头部信息
-       ========================================= */
-    .detail-header {
-        padding: 1.5rem 2rem;
-        border-bottom: 1px solid var(--color-border);
-        background: rgba(0,0,0,0.2);
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        flex-wrap: wrap;
-        gap: 1rem;
-    }
-
-    .glow-text {
-        margin: 0 0 0.5rem 0;
-        font-size: 1.8rem;
-        font-weight: 600;
-        color: #fff;
-        text-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
-    }
-
-    .badges { display: flex; gap: 0.8rem; }
-    .badge {
-        font-size: 0.75rem;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-    }
-    .id-badge { background: rgba(255,255,255,0.1); color: #ccc; }
-    .lang-badge { background: rgba(0, 240, 255, 0.15); color: var(--color-accent); border: 1px solid rgba(0, 240, 255, 0.3); }
-    .size-badge { background: rgba(112, 0, 255, 0.15); color: #b98eff; border: 1px solid rgba(112, 0, 255, 0.3); }
-
-    .header-right { font-size: 0.8rem; color: rgba(255,255,255,0.5); font-family: var(--font-main); }
-
-    /* =========================================
-       代码显示区域 (重点优化)
-       ========================================= */
-    .code-container {
+    .content-container {
+        width: 100%; max-width: 1200px;
+        margin: 0 auto; padding: 2rem;
         flex: 1;
-        padding: 2rem;
-        overflow: auto;
-        background: rgba(0,0,0,0.3); /* 深一点的背景增加对比度 */
-        position: relative;
     }
-
-    pre { margin: 0; width: 100%; }
-
-    code {
-        font-family: var(--font-main);
-        font-size: 15px; /* 更大的字体 */
-        line-height: 1.6;
-        color: #d4d4d4;
-        display: block;
-        min-width: 100%; /* 确保代码不换行，支持横向滚动 */
-    }
-
-    /* 简单的语法高亮颜色模拟 (这里假设是 C++，做一些基础的颜色处理) */
-    /* 注意：如果不引入 PrismJS 等库，只能依赖纯 CSS 或后端处理。
-       这里为了性能保持原生，但通过字体和间距让它看起来很专业。 */
-
-    /* 自定义滚动条 */
-    .custom-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: rgba(255,255,255,0.2);
-        border-radius: 5px;
-        border: 2px solid rgba(0,0,0,0);
-        background-clip: content-box;
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: var(--color-accent); }
 
     /* =========================================
-       底部控制栏
+       Header
        ========================================= */
-    .detail-footer {
-        padding: 1rem 2rem;
-        border-top: 1px solid var(--color-border);
-        background: rgba(0,0,0,0.2);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+    .ocean-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 2rem 3rem;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
     }
 
-    .status-line { font-size: 0.8rem; color: var(--color-success); opacity: 0.8; }
-    .blink { animation: blinker 1s linear infinite; }
-    @keyframes blinker { 50% { opacity: 0; } }
+    .logo-area h1 {
+        margin: 0; font-size: 2rem; letter-spacing: -1px;
+        background: linear-gradient(90deg, #fff, var(--accent-cyan));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .subtitle { font-size: 0.8rem; color: var(--text-muted); letter-spacing: 2px; }
 
-    /* 赛博朋克按钮 */
-    .cyber-btn {
+    .stats-area { display: flex; gap: 1rem; }
+    .stat-pill {
+        background: rgba(255,255,255,0.05);
+        padding: 6px 12px; border-radius: 20px;
+        font-size: 0.75rem; color: var(--text-muted);
+        display: flex; align-items: center; gap: 6px;
+        border: 1px solid transparent;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot.online { background: #00ffaa; box-shadow: 0 0 8px #00ffaa; }
+    .dot.offline { background: #ff3333; }
+
+    /* =========================================
+       Grid Layout & Cards
+       ========================================= */
+    .grid-layout {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 2rem;
+        margin-bottom: 4rem;
+    }
+
+    .deep-card {
         position: relative;
-        background: transparent;
-        color: var(--color-accent);
-        border: 1px solid var(--color-accent);
-        padding: 10px 24px;
+        transition: transform 0.3s ease;
+    }
+    .deep-card:hover { transform: translateY(-5px); }
+
+    .card-inner {
+        display: block;
+        background: var(--glass-bg);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--glass-border);
+        border-radius: 8px;
+        padding: 1.5rem;
+        height: 100%;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        transition: 0.3s;
+        display: flex; flex-direction: column;
+    }
+
+    .deep-card:hover .card-inner {
+        border-color: var(--accent-cyan);
+        box-shadow: 0 10px 30px rgba(0, 210, 255, 0.1);
+        background: rgba(10, 25, 45, 0.85);
+    }
+
+    .card-top { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1rem; }
+    .file-icon {
+        width: 10px; height: 10px; background: var(--accent-cyan);
+        border-radius: 2px; box-shadow: 0 0 10px var(--accent-cyan);
+    }
+    .card-top h3 {
+        margin: 0; font-size: 1.1rem; color: #fff;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* 代码块样式：加粗 + 自动换行 */
+    .code-block {
+        flex: 1;
+        background: rgba(0,0,0,0.3);
+        padding: 1rem;
+        border-radius: 4px;
+        margin-bottom: 1rem;
+        border: 1px solid rgba(255,255,255,0.03);
+    }
+
+    .code-block pre {
+        margin: 0;
+        white-space: pre-wrap; /* 关键：自动换行 */
+        word-break: break-all; /* 关键：打断长单词 */
+    }
+
+    .code-block code {
         font-family: var(--font-main);
+        font-size: 0.85rem;
+        line-height: 1.5;
+        color: #a0c0d0;
+        font-weight: 700; /* 关键：加粗 */
+    }
+
+    .card-bottom {
+        font-size: 0.75rem; color: var(--text-muted);
+        display: flex; justify-content: space-between;
+        padding-top: 0.5rem; border-top: 1px solid rgba(255,255,255,0.05);
+    }
+
+    /* =========================================
+       Pagination
+       ========================================= */
+    .pagination {
+        display: flex; justify-content: center; align-items: center; gap: 1.5rem;
+        margin-bottom: 3rem;
+    }
+    .page-btn {
+        padding: 10px 24px;
+        border: 1px solid var(--glass-border);
+        color: var(--accent-cyan);
+        border-radius: 30px;
+        background: rgba(0,0,0,0.3);
         font-weight: bold;
         font-size: 0.9rem;
-        cursor: pointer;
-        overflow: hidden;
         transition: 0.3s;
-        text-transform: uppercase;
-        letter-spacing: 1px;
     }
-
-    .cyber-btn:hover {
-        background: var(--color-accent);
+    .page-btn:hover:not(.disabled) {
+        background: var(--accent-cyan);
         color: #000;
-        box-shadow: 0 0 20px var(--color-accent);
+        box-shadow: 0 0 15px var(--accent-cyan);
     }
+    .page-btn.disabled { opacity: 0.3; cursor: default; }
 
-    .cyber-btn.success {
-        border-color: var(--color-success);
-        color: var(--color-success);
-        box-shadow: 0 0 20px rgba(0, 255, 157, 0.4);
-    }
+    .page-info { font-weight: bold; letter-spacing: 2px; }
 
-    /* 动画 */
-    .fade-in-down { animation: fadeInDown 0.8s ease-out; }
-    .fade-in-up { animation: fadeInUp 0.8s ease-out 0.2s backwards; }
-
-    @keyframes fadeInDown {
-        from { opacity: 0; transform: translateY(-20px); }
-        to { opacity: 1; transform: translateY(0); }
+    .error-banner {
+        background: rgba(255, 50, 50, 0.1); border: 1px solid #ff3333;
+        color: #ff5555; padding: 1rem; margin-bottom: 2rem; text-align: center;
     }
-    @keyframes fadeInUp {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* 响应式 */
-    @media (max-width: 768px) {
-        .detail-card { width: 100%; border-radius: 0; min-height: 100vh; border: none; }
-        .main-wrapper { padding: 0; }
-        .breadcrumb { margin: 1rem; }
-        .code-container { padding: 1rem; }
-        code { font-size: 13px; }
-    }
-
-    .alert-box {
-        width: 90%; max-width: 1600px;
-        padding: 1rem; margin-bottom: 1rem;
-        border: 1px solid red; background: rgba(255,0,0,0.1); color: #ff5555;
-    }
+    .empty-state { text-align: center; margin-top: 4rem; color: var(--text-muted); }
 </style>
