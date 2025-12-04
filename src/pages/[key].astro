@@ -1,0 +1,184 @@
+---
+// ==========================================
+// 文件路径: src/pages/source/[key].astro
+// ==========================================
+
+import type { D1Database } from '@cloudflare/workers-types';
+
+// 1. 获取 URL 参数
+const { key } = Astro.params;
+
+// 2. 初始化数据库
+const runtime = Astro.locals.runtime;
+let db: D1Database | null = null;
+let item: any = null;
+let errorMsg = "";
+
+if (runtime && runtime.env && runtime.env.cpporigin) {
+    db = runtime.env.cpporigin as D1Database;
+}
+
+// 3. 根据 Key 查询详情
+if (db && key) {
+    try {
+        // 使用 WHERE key = ? 进行精确查找
+        item = await db.prepare("SELECT * FROM cpporigin WHERE key = ?").bind(key).first();
+    } catch (e: any) {
+        errorMsg = "查询失败: " + e.message;
+    }
+}
+
+// 4. 辅助函数
+function formatTime(val: any) {
+    if (typeof val === 'number') return new Date(val * 1000).toISOString().split('T')[0];
+    return val;
+}
+---
+
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{key} - 源码详情</title>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- 面包屑导航 -->
+    <nav class="breadcrumb">
+        <a href="/">🏠 首页列表</a>
+        <span class="sep">/</span>
+        <span class="curr">{key}</span>
+    </nav>
+
+    <!-- 错误处理 -->
+    {errorMsg && <div class="alert-box">{errorMsg}</div>}
+
+    {!item && !errorMsg && (
+            <div class="alert-box">⚠️ 未找到文件：<strong>{key}</strong></div>
+    )}
+
+    <!-- 源码详情卡片 -->
+    {item && (
+            <main class="detail-card">
+                <div class="detail-header">
+                    <h1>{item.key}</h1>
+                    <div class="detail-meta">
+                        <span>File ID: {item.id}</span>
+                        <span>Created: {formatTime(item.created_at || item.date)}</span>
+                    </div>
+                </div>
+
+                <div class="code-content">
+                    <!-- 显示完整代码 -->
+                    <pre><code id="source-code">{item.value || item.content}</code></pre>
+                </div>
+
+                <div class="detail-footer">
+                    <button id="copy-btn" class="copy-btn">📋 复制全部代码</button>
+                </div>
+            </main>
+    )}
+
+</div>
+
+<!-- 简单的复制脚本 -->
+<script>
+    const btn = document.getElementById('copy-btn');
+    const codeBlock = document.getElementById('source-code');
+
+    if(btn && codeBlock) {
+        btn.addEventListener('click', () => {
+            navigator.clipboard.writeText(codeBlock.innerText).then(() => {
+                btn.innerText = "✅ 已复制";
+                setTimeout(() => btn.innerText = "📋 复制全部代码", 2000);
+            });
+        });
+    }
+</script>
+
+</body>
+</html>
+
+<style>
+    :root {
+        --bg: #0d1117;
+        --card-bg: #161b22;
+        --border: #30363d;
+        --text: #c9d1d9;
+        --blue: #58a6ff;
+        --green: #238636;
+    }
+
+    body {
+        background-color: var(--bg);
+        color: var(--text);
+        font-family: Consolas, monospace;
+        margin: 0;
+        padding: 2rem 0;
+    }
+
+    .container { max-width: 1000px; margin: 0 auto; padding: 0 1rem; }
+
+    /* 导航样式 */
+    .breadcrumb { margin-bottom: 1.5rem; font-size: 1rem; }
+    .breadcrumb a { color: var(--blue); text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+    .breadcrumb .sep { margin: 0 0.5rem; color: #8b949e; }
+    .breadcrumb .curr { color: #fff; font-weight: bold; }
+
+    /* 详情卡片 */
+    .detail-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .detail-header {
+        background: #21262d;
+        padding: 1.5rem;
+        border-bottom: 1px solid var(--border);
+    }
+    .detail-header h1 { margin: 0 0 0.5rem 0; color: #fff; font-size: 1.5rem; }
+    .detail-meta { color: #8b949e; font-size: 0.9rem; display: flex; gap: 1.5rem; }
+
+    /* 代码区域 */
+    .code-content {
+        background: #0d1117;
+        padding: 1.5rem;
+        overflow-x: auto;
+    }
+    .code-content pre { margin: 0; }
+    .code-content code { font-family: 'Courier New', Courier, monospace; line-height: 1.5; font-size: 0.95rem; }
+
+    /* 底部按钮 */
+    .detail-footer {
+        padding: 1rem;
+        border-top: 1px solid var(--border);
+        text-align: right;
+        background: #161b22;
+    }
+    .copy-btn {
+        background: var(--green);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 0.9rem;
+        transition: 0.2s;
+    }
+    .copy-btn:hover { background: #2ea043; }
+
+    .alert-box {
+        border: 1px solid #ff7b72;
+        color: #ff7b72;
+        padding: 1.5rem;
+        border-radius: 6px;
+        background: #3c1618;
+        text-align: center;
+    }
+</style>

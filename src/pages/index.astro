@@ -1,137 +1,111 @@
 ---
 // ==========================================
-// 1. 后端逻辑 (只在 Cloudflare 运行)
+// 文件路径: src/pages/index.astro
 // ==========================================
 
 import type { D1Database } from '@cloudflare/workers-types';
 
-// 获取运行时环境
+// 1. 初始化环境与变量
 const runtime = Astro.locals.runtime;
-
-// 变量定义
 let db: D1Database | null = null;
 let errorMsg = "";
-let debugEnv = "";
 let dataList: any[] = [];
 let totalCount = 0;
 
-// 尝试获取数据库绑定
-// 优先找 cpporigin (这是你 wrange.json 里配的)
+// 2. 连接 D1 数据库
 if (runtime && runtime.env) {
-	debugEnv = Object.keys(runtime.env).join(", "); // 用于调试显示有哪些变量
 	if (runtime.env.cpporigin) {
 		db = runtime.env.cpporigin as D1Database;
 	}
 }
 
-// 获取分页参数
+// 3. 处理分页参数
 const page = parseInt(Astro.url.searchParams.get('page') || '1');
 const pageSize = 10;
 const offset = (page - 1) * pageSize;
 
-// 执行数据库查询
+// 4. 执行查询
 if (db) {
 	try {
-		// 【重要】查询逻辑
-		// 1. SELECT * FROM cpporigin -> 你的表名
-		// 2. ORDER BY id DESC -> 按 ID 倒序（最新在前），如果你的表没 id 字段，改成 key 或 rowid
-		// 3. LIMIT ? OFFSET ? -> 分页
+		// 查询列表 (按 key 倒序，或者按 id 倒序)
 		const result = await db.prepare(
 			"SELECT * FROM cpporigin ORDER BY key DESC LIMIT ? OFFSET ?"
 		).bind(pageSize, offset).all();
 
 		dataList = result.results;
 
-		// 查询总数用于分页
+		// 查询总数
 		const countRes = await db.prepare("SELECT COUNT(*) as count FROM cpporigin").first();
-		totalCount = countRes.count as number;
+		totalCount = countRes?.count as number || 0;
 
 	} catch (e: any) {
-		errorMsg = "SQL执行错误: " + e.message;
-		// 智能提示：如果报错没这列，提示用户
-		if (e.message.includes("no such column")) {
-			errorMsg += " (提示: 请检查你的表里是否有 id 或 created_at 字段？)";
-		}
+		errorMsg = "数据库查询出错: " + e.message;
 	}
 } else {
-	// 只有在 runtime 存在但找不到 cpporigin 时才报错
-	if (runtime) {
-		errorMsg = `错误: 找不到绑定 'env.cpporigin'。当前可用绑定: [${debugEnv}]`;
+	// 本地开发如果没有 mock D1，或者未部署，会提示这个
+	if (!runtime) {
+		errorMsg = "本地预览模式：未检测到 Cloudflare Runtime (请部署后测试)";
 	} else {
-		// 本地开发环境没 mock 时会进这里，不算错误
-		errorMsg = "本地预览模式：未连接真实数据库 (请部署后查看)";
+		errorMsg = "错误：找不到名为 'cpporigin' 的数据库绑定";
 	}
 }
 
-// 计算分页
+// 5. 计算分页逻辑
 const totalPages = Math.ceil(totalCount / pageSize);
 const hasPrev = page > 1;
 const hasNext = page < totalPages;
 
-// 日期格式化工具
+// 6. 辅助函数：时间格式化
 function formatTime(val: any) {
-	if (!val) return 'Unknown Date';
-	// 如果是时间戳数字
-	if (typeof val === 'number') {
-		return new Date(val * 1000).toISOString().split('T')[0];
-	}
-	return val; // 如果是字符串直接返回
+	if (!val) return '-';
+	if (typeof val === 'number') return new Date(val * 1000).toISOString().split('T')[0];
+	return val;
 }
 ---
-
-<!-- ========================================== -->
-<!-- 2. 前端界面 (HTML) -->
-<!-- ========================================== -->
 
 <html lang="zh-cn">
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<title>C++ 源码查询系统</title>
+	<title>C++ 源码库</title>
 </head>
 <body>
 
 <header class="navbar">
 	<div class="container nav-inner">
-		<div class="brand">
-			<span class="icon">🧬</span> CPP<span>Origin</span>
-		</div>
-		<div class="meta">
-			Status: {db ? "Online 🟢" : "Offline 🔴"}
-		</div>
+		<div class="brand">🧬 CPP<span>Origin</span></div>
+		<div class="status">{db ? "🟢 Online" : "🔴 Offline"}</div>
 	</div>
 </header>
 
 <main class="container">
 
-	<!-- 错误提示框 -->
-	{errorMsg && (
-		<div class="alert-box">
-			<strong>⚠️ 系统提示：</strong> {errorMsg}
-			<br/>
-			<small>请确保 wrangler.json 中的 binding 叫 cpporigin，且表名正确。</small>
-		</div>
-	)}
+	<!-- 错误提示 -->
+	{errorMsg && <div class="alert-box">{errorMsg}</div>}
 
-	<!-- 列表区域 -->
+	<!-- 列表展示 -->
 	<div class="repo-list">
 		{dataList.map((item) => (
 			<div class="repo-card">
 				<div class="card-header">
-					<div class="file-title">
-						<span class="file-icon">📄</span>
-						<!-- 优先显示 key，如果没有 key 显示 title，再没有显示 Unknown -->
-						<h3>{item.key || item.title || "Unknown_File"}</h3>
+					<div class="file-info">
+						<span class="icon">📄</span>
+						<!-- 核心修改：这里添加了跳转链接 -->
+						<h3>
+							<a href={`/source/${item.key}`} class="file-link">
+								{item.key || "Unknown_File"}
+							</a>
+						</h3>
 					</div>
 					<div class="file-meta">
-						ID: {item.id} &nbsp;|&nbsp;
-						{formatTime(item.created_at || item.date)}
+						<span>ID: {item.id}</span>
+						<span class="date">{formatTime(item.created_at || item.date)}</span>
 					</div>
 				</div>
 
 				<div class="code-preview">
-					<!-- 显示 value 或 content -->
-					<pre><code>{item.value || item.content || "// 空内容"}</code></pre>
+					<!-- 预览只显示前 200 个字符 -->
+					<pre><code>{(item.value || item.content || "").slice(0, 200)}...</code></pre>
 				</div>
 			</div>
 		))}
@@ -139,140 +113,77 @@ function formatTime(val: any) {
 
 	<!-- 空状态 -->
 	{dataList.length === 0 && !errorMsg && (
-		<div class="empty-state">
-			<p>📭 数据库里没有数据，或者表名不对。</p>
-		</div>
+		<div class="empty-state">暂无数据</div>
 	)}
 
-	<!-- 分页按钮 -->
+	<!-- 分页导航 -->
 	<div class="pagination">
-		<a href={hasPrev ? `?page=${page - 1}` : '#'} class={`btn ${!hasPrev ? 'disabled' : ''}`}>
-			&laquo; 上一页
-		</a>
-		<span class="page-count">Page {page} of {totalPages || 1}</span>
-		<a href={hasNext ? `?page=${page + 1}` : '#'} class={`btn ${!hasNext ? 'disabled' : ''}`}>
-			下一页 &raquo;
-		</a>
+		<a href={hasPrev ? `?page=${page - 1}` : '#'} class={`btn ${!hasPrev ? 'disabled' : ''}`}>上一页</a>
+		<span class="page-num">{page} / {totalPages || 1}</span>
+		<a href={hasNext ? `?page=${page + 1}` : '#'} class={`btn ${!hasNext ? 'disabled' : ''}`}>下一页</a>
 	</div>
 
 </main>
 
-<footer class="footer">
-	<p>Powered by Cloudflare D1 & Astro</p>
-</footer>
+<footer class="footer">Cloudflare D1 & Astro Demo</footer>
 
 </body>
 </html>
 
-<!-- ========================================== -->
-<!-- 3. 样式 (CSS) -->
-<!-- ========================================== -->
 <style>
+	/* 全局变量与重置 */
 	:root {
-		--bg: #0d1117;       /* 背景黑 */
-		--card: #161b22;     /* 卡片黑 */
-		--border: #30363d;   /* 边框灰 */
-		--text: #c9d1d9;     /* 文字白 */
-		--blue: #58a6ff;     /* 链接蓝 */
-		--green: #238636;    /* 按钮绿 */
+		--bg: #0d1117;
+		--card-bg: #161b22;
+		--border: #30363d;
+		--text-main: #c9d1d9;
+		--text-muted: #8b949e;
+		--link: #58a6ff;
+		--btn-bg: #21262d;
 	}
+	body { background: var(--bg); color: var(--text-main); font-family: Consolas, monospace; margin: 0; }
+	a { text-decoration: none; }
 
-	body {
-		background-color: var(--bg);
-		color: var(--text);
-		font-family: Consolas, "Courier New", monospace; /* 全局等宽字体 */
-		margin: 0;
-		line-height: 1.5;
-	}
+	.container { max-width: 900px; margin: 0 auto; padding: 0 1rem; }
 
-	.container {
-		max-width: 900px;
-		margin: 0 auto;
-		padding: 0 1rem;
-	}
+	/* 顶部导航 */
+	.navbar { border-bottom: 1px solid var(--border); background: var(--card-bg); padding: 1rem 0; margin-bottom: 2rem; }
+	.nav-inner { display: flex; justify-content: space-between; align-items: center; }
+	.brand { font-size: 1.2rem; font-weight: bold; }
+	.brand span { color: var(--link); }
+	.status { font-size: 0.8rem; color: var(--text-muted); }
 
-	/* 导航栏 */
-	.navbar {
-		background: var(--card);
-		border-bottom: 1px solid var(--border);
-		padding: 1rem 0;
-		margin-bottom: 2rem;
-	}
-	.nav-inner {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-	.brand { font-size: 1.5rem; font-weight: bold; color: var(--text); }
-	.brand span { color: var(--blue); }
-	.meta { font-size: 0.85rem; color: #8b949e; }
-
-	/* 错误提示 */
-	.alert-box {
-		background: #3c1618;
-		border: 1px solid #ff7b72;
-		color: #ff7b72;
-		padding: 1rem;
-		border-radius: 6px;
-		margin-bottom: 1.5rem;
-		font-family: sans-serif;
-	}
-
-	/* 卡片列表 */
+	/* 列表卡片 */
 	.repo-list { display: flex; flex-direction: column; gap: 1rem; }
-
-	.repo-card {
-		background: var(--card);
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		overflow: hidden;
-	}
+	.repo-card { border: 1px solid var(--border); border-radius: 6px; background: var(--card-bg); overflow: hidden; }
 
 	.card-header {
-		background: #21262d;
-		padding: 0.75rem 1rem;
+		padding: 0.8rem 1rem;
 		border-bottom: 1px solid var(--border);
+		background: #21262d;
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 	}
-	.file-title h3 {
-		margin: 0;
-		font-size: 1rem;
-		color: var(--blue);
-		display: inline-block;
-	}
-	.file-meta { font-size: 0.8rem; color: #8b949e; }
 
-	/* 代码预览 */
-	.code-preview {
-		padding: 1rem;
-		background: #0d1117;
-		overflow-x: auto;
-	}
-	.code-preview pre { margin: 0; }
-	.code-preview code { color: #8b949e; font-size: 0.9rem; }
+	.file-info h3 { margin: 0; display: inline; font-size: 1rem; }
+	.file-link { color: var(--link); font-weight: 600; }
+	.file-link:hover { text-decoration: underline; color: #79c0ff; }
+	.icon { margin-right: 0.5rem; }
+
+	.file-meta { font-size: 0.8rem; color: var(--text-muted); display: flex; gap: 1rem; }
+
+	/* 代码预览区 */
+	.code-preview { padding: 1rem; background: #0d1117; font-size: 0.85rem; color: var(--text-muted); }
+	.code-preview pre { margin: 0; white-space: pre-wrap; word-break: break-all; }
 
 	/* 分页 */
-	.pagination {
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		margin: 2rem 0;
-		gap: 1rem;
-	}
-	.btn {
-		background: var(--card);
-		border: 1px solid var(--border);
-		color: var(--blue);
-		padding: 5px 15px;
-		border-radius: 6px;
-		text-decoration: none;
-		transition: 0.2s;
-	}
+	.pagination { display: flex; justify-content: center; gap: 1rem; margin: 2rem 0; align-items: center; }
+	.btn { padding: 5px 15px; border: 1px solid var(--border); color: var(--link); border-radius: 6px; background: var(--btn-bg); transition: 0.2s; }
 	.btn:hover:not(.disabled) { background: #30363d; }
-	.btn.disabled { opacity: 0.5; pointer-events: none; color: #8b949e; }
+	.btn.disabled { opacity: 0.5; cursor: not-allowed; color: var(--text-muted); }
 
-	.empty-state { text-align: center; padding: 3rem; color: #8b949e; }
-	.footer { text-align: center; padding: 2rem; color: #484f58; font-size: 0.8rem; border-top: 1px solid var(--border); }
+	.alert-box { border: 1px solid #ff7b72; color: #ff7b72; padding: 1rem; border-radius: 6px; margin-bottom: 1rem; }
+	.empty-state, .footer { text-align: center; color: var(--text-muted); padding: 2rem; }
+	.footer { border-top: 1px solid var(--border); font-size: 0.8rem; }
 </style>
