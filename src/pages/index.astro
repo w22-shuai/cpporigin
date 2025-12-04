@@ -21,7 +21,7 @@ if (db) {
 	try {
 		// 注意：这里表名是 cpporigin，如果你的表名是 cpp_origin，请修改 SQL 里的 FROM
 		const result = await db.prepare(
-			"SELECT * FROM cpporigin ORDER BY created_at DESC LIMIT ? OFFSET ?"
+			"SELECT * FROM cpporigin ORDER BY key DESC LIMIT ? OFFSET ?"
 		).bind(pageSize, offset).all();
 
 		let codes = result.results as any[];
