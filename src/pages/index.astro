@@ -6,22 +6,226 @@ const { results } = await db.prepare('SELECT id, maintitle FROM cppOriginIndex')
 <!DOCTYPE html>
 <html lang="zh-cn">
 <head>
-    <!-- 关键是下面这一行！必须要加！ -->
     <meta charset="utf-8" />
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>我的博客</title>
+    <title>C++学习之旅</title>
+    <!-- 引入谷歌字体，增加高级感 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <h1>首页 - 知识分类</h1>
-    <ul>
-        {results.map((item: any) => (
-            <li>
-                <a href={`/category/${item.id}`}>
-                    {item.maintitle}
-                </a>
-            </li>
-        ))}
-    </ul>
+    <div class="background-glow"></div>
+
+    <main class="container">
+        <header>
+            <span class="badge">Docs</span>
+            <h1>C++ <span class="text-gradient">学习之旅</span></h1>
+            <p class="subtitle">探索核心原理与编程艺术</p>
+        </header>
+
+        <ul class="grid-list">
+            {results.map((item: any, index: number) => (
+                <li style={`--i: ${index}`}>
+                    <a href={`/category/${item.id}`} class="card">
+                        <div class="card-icon">
+                            <span>{item.id}</span>
+                        </div>
+                        <div class="card-content">
+                            <h2>{item.maintitle}</h2>
+                            <span class="arrow">→</span>
+                        </div>
+                    </a>
+                </li>
+            ))}
+        </ul>
+    </main>
+
+<style>
+    /* 全局重置与变量 */
+    :root {
+        --bg-color: #0f172a;
+        --card-bg: rgba(30, 41, 59, 0.7);
+        --card-border: rgba(148, 163, 184, 0.1);
+        --primary: #38bdf8;
+        --secondary: #818cf8;
+        --text-main: #f1f5f9;
+        --text-muted: #94a3b8;
+        --glow: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.15), transparent 60%);
+    }
+
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    body {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-main);
+        min-height: 100vh;
+        overflow-x: hidden;
+        position: relative;
+    }
+
+    /* 背景氛围光效 */
+    .background-glow {
+        position: fixed;
+        top: -20%;
+        left: -20%;
+        width: 140%;
+        height: 140%;
+        background:
+            radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.08), transparent 25%),
+            radial-gradient(circle at 85% 30%, rgba(129, 140, 248, 0.08), transparent 25%);
+        z-index: -1;
+        pointer-events: none;
+    }
+
+    /* 布局容器 */
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 4rem 1.5rem;
+    }
+
+    /* 头部设计 */
+    header {
+        text-align: center;
+        margin-bottom: 4rem;
+        animation: fadeInDown 0.8s ease-out forwards;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        background: rgba(56, 189, 248, 0.1);
+        color: var(--primary);
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        border: 1px solid rgba(56, 189, 248, 0.2);
+    }
+
+    h1 {
+        font-size: 3.5rem;
+        font-weight: 800;
+        letter-spacing: -0.05em;
+        line-height: 1.1;
+        margin-bottom: 1rem;
+    }
+
+    .text-gradient {
+        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    .subtitle {
+        color: var(--text-muted);
+        font-size: 1.125rem;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    /* 网格列表 */
+    .grid-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1.5rem;
+        list-style: none;
+    }
+
+    /* 列表项动画 */
+    li {
+        opacity: 0;
+        animation: fadeInUp 0.5s ease-out forwards;
+        animation-delay: calc(var(--i) * 0.05s); /* 阶梯式延迟 */
+    }
+
+    /* 卡片设计 */
+    .card {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        height: 100%;
+        padding: 1.75rem;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        text-decoration: none;
+        color: inherit;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        backdrop-filter: blur(10px);
+    }
+
+    /* 卡片悬停效果 */
+    .card:hover {
+        transform: translateY(-5px);
+        background: rgba(30, 41, 59, 0.9);
+        border-color: rgba(56, 189, 248, 0.3);
+        box-shadow:
+            0 20px 25px -5px rgba(0, 0, 0, 0.3),
+            0 10px 10px -5px rgba(0, 0, 0, 0.2),
+            0 0 15px rgba(56, 189, 248, 0.1);
+    }
+
+    /* 卡片内部 ID 装饰 (模拟 C++ 数组下标风格) */
+    .card-icon {
+        font-family: 'JetBrains Mono', monospace;
+        color: var(--primary);
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+        opacity: 0.7;
+    }
+
+    .card-icon span::before { content: "["; color: var(--text-muted); }
+    .card-icon span::after { content: "]"; color: var(--text-muted); }
+
+    .card-content h2 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        line-height: 1.4;
+        margin-bottom: 1rem;
+        color: var(--text-main);
+    }
+
+    /* 箭头动画 */
+    .arrow {
+        align-self: flex-end;
+        color: var(--primary);
+        font-weight: bold;
+        transition: transform 0.3s ease;
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+
+    .card:hover .arrow {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    /* 动画定义 */
+    @keyframes fadeInDown {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 移动端适配 */
+    @media (max-width: 640px) {
+        h1 { font-size: 2.5rem; }
+        .container { padding: 3rem 1rem; }
+    }
+</style>
 </body>
 </html>
