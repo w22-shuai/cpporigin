@@ -18,24 +18,35 @@ const { results } = await db.prepare('SELECT id, maintitle FROM cppOriginIndex')
 
     <main class="container">
         <header>
-            <h1>C++ <span class="text-gradient">学习之旅</span></h1>
+            <h1>C++ <span class="text-gradient">日志</span></h1>
         </header>
 
-        <ul class="grid-list">
-            {results.map((item: any, index: number) => (
-                <li style={`--i: ${index}`}>
-                    <a href={`/category/${item.id}`} class="card">
-                        <div class="card-icon">
-                            <span>{item.id}</span>
-                        </div>
-                        <div class="card-content">
-                            <h2>{item.maintitle}</h2>
-                            <span class="arrow">→</span>
-                        </div>
-                    </a>
-                </li>
-            ))}
-        </ul>
+       <ul class="grid-list">
+        {results.map((item: any, index: number) => (
+            <li style={`--i: ${index}`}>
+                <a href={`/category/${item.id}`} class="card">
+                    <div class="card-icon">
+                        <span>{item.id}</span>
+                    </div>
+                    <div class="card-content">
+                        <h2>{item.maintitle}</h2>
+                        <span class="arrow">→</span>
+                    </div>
+                </a>
+            </li>
+        ))}
+
+        <!-- 新增的添加按钮卡片，接在列表后面 -->
+        <!-- 使用 results.length 作为索引，确保动画延迟排在最后 -->
+        <li style={`--i: ${results.length}`}>
+            <a href="/add" class="card add-card">
+                <div class="add-content">
+                    <span class="plus-icon">+</span>
+                    <span class="add-text">New Record</span>
+                </div>
+            </a>
+        </li>
+    </ul>
     </main>
 
 <style>
@@ -222,6 +233,52 @@ const { results } = await db.prepare('SELECT id, maintitle FROM cppOriginIndex')
     @media (max-width: 640px) {
         h1 { font-size: 2.5rem; }
         .container { padding: 3rem 1rem; }
+    }
+    .add-card {
+        /* 继承 .card 的所有属性，额外修改布局为居中 */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px dashed rgba(56, 189, 248, 0.3); /* 虚线边框 */
+        background: rgba(30, 41, 59, 0.4); /* 比普通卡片稍微透明一点 */
+    }
+
+    .add-card:hover {
+        border-color: var(--primary);
+        background: rgba(30, 41, 59, 0.8);
+        transform: translateY(-5px); /* 保持和其他卡片一样的上浮效果 */
+    }
+
+    .add-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        text-align: center;
+    }
+
+    .plus-icon {
+        font-size: 2.5rem;
+        color: var(--primary);
+        font-weight: 300;
+        line-height: 1;
+        transition: transform 0.3s ease;
+    }
+
+    .add-text {
+        font-size: 1rem;
+        color: var(--text-muted);
+        font-weight: 600;
+    }
+
+    /* 悬停时加号旋转效果 */
+    .add-card:hover .plus-icon {
+        transform: rotate(90deg) scale(1.1);
+        color: #fff;
+    }
+
+    .add-card:hover .add-text {
+        color: var(--text-main);
     }
 </style>
 </body>
