@@ -21,7 +21,7 @@ const { results: posts } = await db.prepare(
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{categoryName} - 文章列表</title>
+    <title>{categoryName}</title>
 
     <style>
         /* --- 全局样式：VS Code 深色风格 --- */
@@ -141,10 +141,8 @@ const { results: posts } = await db.prepare(
     <div class="container">
         <!-- 页面标题：模拟代码声明风格 const title = "分类名" -->
         <h1>
-            <span class="keyword">const</span>
-            category
-            =
-            <span class="string">"{categoryName}"</span>;
+            <span class="keyword">#include</span>
+            <span class="string">"{"<"}{categoryName}{">"}"</span>;
         </h1>
 
         <!-- 文章列表 -->
