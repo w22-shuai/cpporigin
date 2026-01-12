@@ -1,0 +1,73 @@
+---
+// 1. 获取 URL 参数
+const { id } = Astro.params;
+const db = Astro.locals.runtime.env.cpporigin;
+
+// 2. 查询文章详情
+// 我们使用 SELECT *，这样既能拿到 content，也能拿到 category_id (方便做返回按钮)
+const post = await db.prepare('SELECT * FROM cppOriginContent WHERE id = ?').bind(id).first();
+
+// 3. 处理文章不存在的情况 (比如用户乱输了一个 id)
+if (!post) {
+    return new Response('404: 文章不存在', { status: 404 });
+}
+---
+
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{post.title}</title>
+
+    <style>
+        /* 简单的样式优化 */
+        body {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: sans-serif;
+            line-height: 1.6;
+        }
+        .content {
+            /* 关键样式：保留数据库文本里的换行和空格 */
+            white-space: pre-wrap;
+            font-size: 1.1em;
+            color: #333;
+        }
+        .meta {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 顶部导航 -->
+    <nav>
+        <!-- 聪明的设计：点击返回可以回到该文章所属的分类列表，而不是直接回首页 -->
+        <a href={`/category/${post.category_id}`} style="text-decoration: none;">
+            ← 返回上级列表
+        </a>
+        <span style="margin: 0 10px;">|</span>
+        <a href="/" style="text-decoration: none;">回首页</a>
+    </nav>
+
+    <hr />
+
+    <article>
+        <!-- 标题 -->
+        <h1>{post.title}</h1>
+
+        <!-- 如果你有 created_at 字段，可以在这里显示时间，没有也没关系 -->
+        <!-- <div class="meta">发布时间：{post.created_at}</div> -->
+
+        <!-- 正文内容 -->
+        <div class="content">
+            {post.content}
+        </div>
+    </article>
+
+</body>
+</html>
