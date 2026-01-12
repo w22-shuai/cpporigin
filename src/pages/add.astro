@@ -1,0 +1,298 @@
+---
+// 1. 服务端逻辑：处理数据提交和获取现有分类
+const db = Astro.locals.runtime.env.cpporigin;
+
+// 获取现有分类供用户选择
+const { results: categories } = await db.prepare('SELECT id, maintitle FROM cppOriginIndex').all();
+
+// 处理表单提交
+if (Astro.request.method === "POST") {
+  try {
+    const formData = await Astro.request.formData();
+    const selectionType = formData.get("selection_type"); // 'existing' or 'new'
+    const title = formData.get("title");
+    const content = formData.get("content");
+
+    let categoryId = formData.get("category_id");
+    const newCategoryName = formData.get("new_category_name");
+
+    // 简单验证
+    if (!title || !content) {
+      throw new Error("标题和内容不能为空");
+    }
+
+    // 如果是新建分类
+    if (selectionType === 'new') {
+        if (!newCategoryName) throw new Error("请输入新分类名称");
+
+        // 插入新分类到 cppOriginIndex
+        const insertCat = await db.prepare('INSERT INTO cppOriginIndex (maintitle) VALUES (?) RETURNING id')
+            .bind(newCategoryName)
+            .first();
+        categoryId = insertCat.id;
+    }
+
+    // 插入内容到 cppOriginContent
+    await db.prepare('INSERT INTO cppOriginContent (category_id, title, content) VALUES (?, ?, ?)')
+        .bind(categoryId, title, content)
+        .run();
+
+    // 成功后重定向回首页
+    return Astro.redirect("/");
+
+  } catch (error) {
+    console.error("保存失败:", error);
+    // 实际项目中可以将错误传递给前端显示
+  }
+}
+---
+
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>添加新记录 - C++学习之旅</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="background-glow"></div>
+
+    <main class="container">
+        <header>
+            <a href="/" class="back-link">← 返回首页</a>
+            <h1>添加 <span class="text-gradient">记录</span></h1>
+        </header>
+
+        <form method="POST" class="form-card">
+
+            <!-- 第一部分：选择或新建分类 -->
+            <section class="form-section">
+                <h2 class="section-title">所属分类 (Category)</h2>
+
+                <div class="category-grid">
+                    <!-- 现有分类循环 -->
+                    {categories.map((cat) => (
+                        <label class="radio-card">
+                            <input type="radio" name="category_id" value={cat.id} onclick="document.getElementById('new-cat-input').style.display='none'; document.querySelector('input[name=selection_type]').value='existing'" required>
+                            <span class="card-inner">
+                                <span class="cat-id">[{cat.id}]</span>
+                                <span class="cat-name">{cat.maintitle}</span>
+                            </span>
+                        </label>
+                    ))}
+
+                    <!-- 新建分类选项 -->
+                    <label class="radio-card new-option">
+                        <input type="radio" name="category_id" value="new" onclick="document.getElementById('new-cat-input').style.display='block'; document.querySelector('input[name=selection_type]').value='new'">
+                        <span class="card-inner">
+                            <span class="cat-icon">+</span>
+                            <span class="cat-name">新建分类</span>
+                        </span>
+                    </label>
+                </div>
+
+                <!-- 隐藏字段用于判断逻辑 -->
+                <input type="hidden" name="selection_type" value="existing">
+
+                <!-- 新建分类输入框 (默认隐藏) -->
+                <div id="new-cat-input" class="input-group hidden-input">
+                    <label for="new_category_name">新分类大标题</label>
+                    <input type="text" name="new_category_name" placeholder="例如: 内存管理">
+                </div>
+            </section>
+
+            <hr class="divider">
+
+            <!-- 第二部分：具体内容 -->
+            <section class="form-section">
+                <h2 class="section-title">内容详情 (Details)</h2>
+
+                <div class="input-group">
+                    <label for="title">小标题 / 知识点</label>
+                    <input type="text" name="title" placeholder="例如: 智能指针 unique_ptr" required>
+                </div>
+
+                <div class="input-group">
+                    <label for="content">详细笔记 / 代码</label>
+                    <textarea name="content" rows="8" placeholder="在这里输入详细的 Markdown 内容或代码片段..." required></textarea>
+                </div>
+            </section>
+
+            <button type="submit" class="submit-btn">
+                <span>提交记录</span>
+                <span class="arrow">→</span>
+            </button>
+
+        </form>
+    </main>
+
+    <style>
+        /* 复用首页的核心变量 */
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --card-border: rgba(148, 163, 184, 0.1);
+            --primary: #38bdf8;
+            --secondary: #818cf8;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --input-bg: rgba(15, 23, 42, 0.6);
+        }
+
+        /* 基础重置 */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+        }
+
+        /* 背景特效 */
+        .background-glow {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.1), transparent 50%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container { max-width: 800px; margin: 0 auto; padding: 3rem 1.5rem; }
+
+        /* 头部 */
+        header { text-align: center; margin-bottom: 2rem; }
+        h1 { font-size: 2.5rem; font-weight: 800; margin-top: 1rem; }
+        .text-gradient {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .back-link { color: var(--text-muted); text-decoration: none; font-size: 0.9rem; transition: color 0.2s; }
+        .back-link:hover { color: var(--primary); }
+
+        /* 表单容器卡片 */
+        .form-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 2.5rem;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            margin-bottom: 1.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+
+        /* 分类选择网格 (Checkbox 风格) */
+        .category-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* 隐藏原生 Radio */
+        .radio-card input[type="radio"] { display: none; }
+
+        /* 自定义 Radio 样式 */
+        .card-inner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            height: 100%;
+            min-height: 80px;
+        }
+
+        .cat-id { font-family: 'JetBrains Mono'; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem; }
+        .cat-name { font-weight: 600; text-align: center; }
+        .cat-icon { font-size: 1.5rem; color: var(--primary); margin-bottom: 0.25rem; }
+
+        /* 选中状态 */
+        .radio-card input:checked + .card-inner {
+            background: rgba(56, 189, 248, 0.15);
+            border-color: var(--primary);
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+            transform: translateY(-2px);
+        }
+        .radio-card input:checked + .card-inner .cat-id,
+        .radio-card input:checked + .card-inner .cat-name { color: white; }
+
+        /* 新建选项样式 */
+        .new-option .card-inner { border-style: dashed; }
+
+        /* 输入框样式 */
+        .input-group { margin-bottom: 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+        .input-group label { font-size: 0.9rem; font-weight: 600; color: var(--text-muted); }
+
+        input[type="text"], textarea {
+            width: 100%;
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            color: var(--text-main);
+            font-family: inherit;
+            transition: all 0.3s;
+            font-size: 1rem;
+        }
+
+        textarea { font-family: 'JetBrains Mono', monospace; line-height: 1.6; resize: vertical; }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
+        }
+
+        .hidden-input { display: none; animation: fadeIn 0.3s ease; }
+
+        .divider {
+            border: 0;
+            height: 1px;
+            background: var(--card-border);
+            margin: 2rem 0;
+        }
+
+        /* 提交按钮 */
+        .submit-btn {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 700;
+            font-size: 1.1rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            transition: opacity 0.2s, transform 0.2s;
+        }
+
+        .submit-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .submit-btn:active { transform: translateY(0); }
+
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</body>
+</html>
