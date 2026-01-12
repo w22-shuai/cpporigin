@@ -1,19 +1,16 @@
 ---
-// 1. 获取 URL 中的 id 参数 (例如 /category/1 中的 1)
+// 1. 获取 URL 中的 id 参数
 const { id } = Astro.params;
 const db = Astro.locals.runtime.env.cpporigin;
 
-// 2. 查询当前分类的名字 (为了显示在网页标题上)
-// SQL: 从 cppOriginIndex 表找 maintitle
+// 2. 查询当前分类的名字
 const categoryData = await db.prepare(
     'SELECT maintitle FROM cppOriginIndex WHERE id = ?'
 ).bind(id).first();
 
-// 如果查不到分类，给个默认名
 const categoryName = categoryData ? categoryData.maintitle : '未知分类';
 
 // 3. 查询该分类下的所有文章标题
-// SQL: 从 cppOriginContent 表找 title，条件是 category_id 匹配
 const { results: posts } = await db.prepare(
     'SELECT id, title FROM cppOriginContent WHERE category_id = ?'
 ).bind(id).all();
@@ -25,34 +22,148 @@ const { results: posts } = await db.prepare(
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{categoryName} - 文章列表</title>
+
+    <style>
+        /* --- 全局样式：VS Code 深色风格 --- */
+        body {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Consolas', 'Monaco', 'Andale Mono', monospace;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+
+        /* --- 顶部导航栏 --- */
+        nav {
+            background-color: #252526;
+            padding: 12px 20px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+        }
+
+        /* --- 按钮样式 (青色边框风格) --- */
+        .btn-back {
+            text-decoration: none;
+            color: #00E5FF;
+            border: 1px solid #00E5FF;
+            padding: 5px 15px;
+            border-radius: 3px;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+        .btn-back:hover {
+            background-color: rgba(0, 229, 255, 0.1);
+            box-shadow: 0 0 8px rgba(0, 229, 255, 0.2);
+        }
+
+        /* --- 主容器 --- */
+        .container {
+            max-width: 800px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+
+        /* --- 标题样式 --- */
+        h1 {
+            color: #cccccc;
+            border-bottom: 1px solid #333;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            font-weight: normal;
+        }
+
+        /* 这里的 span 模拟代码高亮效果 */
+        .keyword { color: #569cd6; margin-right: 10px; } /* 蓝色关键字 */
+        .string { color: #ce9178; } /* 橙色字符串 */
+
+        /* --- 列表样式 --- */
+        ul {
+            list-style: none; /* 去掉默认圆点 */
+            padding: 0;
+            margin: 0;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        /* --- 列表项链接样式 --- */
+        .post-link {
+            display: block;
+            padding: 12px 15px;
+            background-color: #252526; /*稍微比背景亮一点*/
+            border: 1px solid #333;
+            border-radius: 4px;
+            text-decoration: none;
+            color: #9cdcfe; /* 浅蓝色文字 */
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        /* 鼠标悬停效果 */
+        .post-link:hover {
+            background-color: #2a2d2e;
+            border-color: #444;
+            transform: translateX(5px); /* 微微右移 */
+            color: #4fc1ff; /* 高亮蓝 */
+        }
+
+        /* 在链接前加一个小图标或符号 */
+        .post-link::before {
+            content: "#";
+            color: #6a9955; /* 绿色 */
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        /* --- 空状态提示 --- */
+        .empty-state {
+            color: #666;
+            font-style: italic;
+            padding: 20px;
+            text-align: center;
+            border: 1px dashed #333;
+            border-radius: 4px;
+        }
+    </style>
 </head>
 <body>
-    <!-- 顶部导航：返回首页 -->
-    <nav style="margin-bottom: 20px;">
-        <a href="/">← 返回首页</a>
+
+    <!-- 顶部导航 -->
+    <nav>
+        <a href="/" class="btn-back">← 返回首页</a>
     </nav>
 
-    <!-- 页面主标题：显示分类名，如“异步” -->
-    <h1>分类：{categoryName}</h1>
+    <div class="container">
+        <!-- 页面标题：模拟代码声明风格 const title = "分类名" -->
+        <h1>
+            <span class="keyword">const</span>
+            category
+            =
+            <span class="string">"{categoryName}"</span>;
+        </h1>
 
-    <hr />
-
-    <!-- 文章列表区域 -->
-    {posts && posts.length > 0 ? (
-        <ul>
-            {posts.map((post: any) => (
-                <li>
-                    <!-- 点击标题跳转到文章详情页 (下一级页面) -->
-                    <!-- 路径格式：/post/文章ID -->
-                    <a href={`/source/${post.id}`}>
-                        {post.title}
-                    </a>
-                </li>
-            ))}
-        </ul>
-    ) : (
-        <p>该分类下暂时没有文章。</p>
-    )}
+        <!-- 文章列表 -->
+        {posts && posts.length > 0 ? (
+            <ul>
+                {posts.map((post: any) => (
+                    <li>
+                        <a href={`/source/${post.id}`} class="post-link">
+                            {post.title}
+                        </a>
+                    </li>
+                ))}
+            </ul>
+        ) : (
+            <div class="empty-state">
+                // TODO: 该分类下暂时没有文章...
+            </div>
+        )}
+    </div>
 
 </body>
 </html>
