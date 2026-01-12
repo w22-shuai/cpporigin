@@ -8,380 +8,220 @@ const { results } = await db.prepare('SELECT id, maintitle FROM cppOriginIndex')
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>C++ 学习之旅</title>
+    <title>C++学习之旅</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- 引入 Montserrat 字体以匹配卡片设计 -->
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 </head>
 <body>
+    <div class="background-glow"></div>
 
     <main class="container">
         <header>
             <h1>C++ <span class="text-gradient">学习之旅</span></h1>
         </header>
 
-        <div class="grid-list">
-            {results.map((item: any) => (
-                <div class="main-card-wrapper">
-                    <!-- 卡片正面 -->
-                    <div class="card">
-                        <div class="fl">
-                            <div class="fullscreen">
-                                <!-- 全屏图标 -->
-                                <svg class="fullscreen_svg" viewBox="0 0 24 24">
-                                    <path d="M5 5h5v2H7v3H5V5zm9 0h5v5h-2V7h-3V5zm3 9h2v5h-5v-2h3v-3zm-7 3v2H5v-5h2v3h3z"></path>
-                                </svg>
-                            </div>
+        <ul class="grid-list">
+            {results.map((item: any, index: number) => (
+                <li style={`--i: ${index}`}>
+                    <a href={`/category/${item.id}`} class="card">
+                        <div class="card-icon">
+                            <span>{item.id}</span>
                         </div>
-
-                        <div class="card_content">
-                            <!-- 将按钮作为链接 -->
-                            <a href={`/category/${item.id}`} class="card-link-btn">
-                                {item.maintitle}
-                            </a>
+                        <div class="card-content">
+                            <h2>{item.maintitle}</h2>
+                            <span class="arrow">→</span>
                         </div>
-                    </div>
-
-                    <!-- 卡片背面 (悬浮显示) -->
-                    <div class="card_back">
-                        <div class="data">
-                            <div class="img">
-                                <!-- 生成一个基于ID的伪随机颜色头像，或者放C++ logo -->
-                                <div style="width:100%; height:100%; display:flex; justify-content:center; align-items:center; color:white; font-size:1.2em; background: #333;">
-                                    C++
-                                </div>
-                            </div>
-                            <div class="text">
-                                <span class="text_m">Chapter {item.id}</span>
-                                <span class="text_s">Learning Note</span>
-                            </div>
-                        </div>
-
-                        <div class="btns">
-                            <div class="likes">
-                                <svg class="likes_svg" viewBox="0 0 24 24">
-                                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                                </svg>
-                                <span class="likes_text">Like</span>
-                            </div>
-                            <div class="comments">
-                                <svg class="comments_svg" viewBox="0 0 24 24">
-                                    <path d="M21 6h-2v9H6v2c0 .55.45 1 1 1h11l4 4V7c0-.55-.45-1-1-1zm-4 6V3c0-.55-.45-1-1-1H3c-.55 0-1 .45-1 1v14l4-4h10c.55 0 1-.45 1-1z"/>
-                                </svg>
-                                <span class="comments_text">Com</span>
-                            </div>
-                            <div class="views">
-                                <svg class="views_svg" viewBox="0 0 24 24">
-                                    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
-                                </svg>
-                                <span class="views_text">View</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                    </a>
+                </li>
             ))}
-        </div>
+        </ul>
     </main>
 
 <style>
-    /* 全局样式重置 */
-    body {
-        margin: 0;
-        padding: 0;
-        background-color: #121212; /* 深色背景以突显卡片 */
-        font-family: 'Montserrat', sans-serif;
-        color: white;
+    /* 全局重置与变量 */
+    :root {
+        --bg-color: #0f172a;
+        --card-bg: rgba(30, 41, 59, 0.7);
+        --card-border: rgba(148, 163, 184, 0.1);
+        --primary: #38bdf8;
+        --secondary: #818cf8;
+        --text-main: #f1f5f9;
+        --text-muted: #94a3b8;
+        --glow: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.15), transparent 60%);
     }
 
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    body {
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-main);
+        min-height: 100vh;
+        overflow-x: hidden;
+        position: relative;
+    }
+
+    /* 背景氛围光效 */
+    .background-glow {
+        position: fixed;
+        top: -20%;
+        left: -20%;
+        width: 140%;
+        height: 140%;
+        background:
+            radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.08), transparent 25%),
+            radial-gradient(circle at 85% 30%, rgba(129, 140, 248, 0.08), transparent 25%);
+        z-index: -1;
+        pointer-events: none;
+    }
+
+    /* 布局容器 */
     .container {
         max-width: 1200px;
         margin: 0 auto;
-        padding: 2rem;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
+        padding: 4rem 1.5rem;
     }
 
+    /* 头部设计 */
     header {
-        margin-bottom: 4rem;
         text-align: center;
+        margin-bottom: 4rem;
+        animation: fadeInDown 0.8s ease-out forwards;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        background: rgba(56, 189, 248, 0.1);
+        color: var(--primary);
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        border: 1px solid rgba(56, 189, 248, 0.2);
     }
 
     h1 {
-        font-size: 3rem;
+        font-size: 3.5rem;
         font-weight: 800;
+        letter-spacing: -0.05em;
+        line-height: 1.1;
+        margin-bottom: 1rem;
     }
 
     .text-gradient {
-        background: linear-gradient(90deg, #ce68d9, #45c6db, #45db79);
+        background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        background-size: 400%;
-        animation: gradient-anim 3s infinite alternate;
+        background-clip: text;
     }
 
-    @keyframes gradient-anim {
-        0% { background-position: 0%; }
-        100% { background-position: 100%; }
+    .subtitle {
+        color: var(--text-muted);
+        font-size: 1.125rem;
+        max-width: 600px;
+        margin: 0 auto;
     }
 
-    /* Grid 布局 */
+    /* 网格列表 */
     .grid-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 3rem; /* 增加间距以适应卡片悬浮展开 */
-        justify-content: center;
-        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 1.5rem;
+        list-style: none;
     }
 
-    /* --- 以下是融合的卡片 CSS --- */
-
-    /*
-       .main-card-wrapper 对应原来的 .main
-       它是 hover 触发的容器
-    */
-    .main-card-wrapper {
-        position: relative;
-        /* 确保 hover 时层级提高，不被遮挡 */
-        z-index: 1;
-        transition: z-index 0s 0s;
+    /* 列表项动画 */
+    li {
+        opacity: 0;
+        animation: fadeInUp 0.5s ease-out forwards;
+        animation-delay: calc(var(--i) * 0.05s); /* 阶梯式延迟 */
     }
 
-    .main-card-wrapper:hover {
-        z-index: 10;
-    }
-
+    /* 卡片设计 */
     .card {
-        width: 15em;
-        height: 10em;
-        background: linear-gradient(270deg, #ce68d9, #45c6db, #45db79);
-        background-size: 800% 800%;
-        animation: AnimationName 3s ease infinite;
-        transition: .4s ease-in-out;
-        border-radius: 7px;
-        cursor: pointer;
-        position: relative; /* 确保 z-index 生效 */
-        z-index: 2; /* 保证卡片本身在背面之上 */
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-    }
-
-    .fl {
         display: flex;
-        justify-content: flex-end;
-        opacity: 0;
-        transition: .2s ease-in-out;
-    }
-
-    .main-card-wrapper:hover .fl {
-        opacity: 1;
-        cursor: pointer;
-        margin-right: 0.5em;
-    }
-
-    .fullscreen {
-        width: 1.5em;
-        height: 1.5em;
-        border-radius: 5px;
-        background-color: #727890;
-        margin: 1em;
-        margin-right: 0.5em;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: .2s ease-in-out;
-        box-shadow: 2px 2px 6px rgba(0,0,0,.4);
-    }
-
-    .fl:hover .fullscreen {
-        scale: 1.2;
-    }
-
-    .fl:hover .fullscreen_svg {
-        fill: white;
-    }
-
-    .fullscreen_svg {
-        width: 15px;
-        height: 15px;
-        fill: rgb(177, 176, 176);
-        transition: .2s ease-in-out;
-    }
-
-    /* 卡片背面逻辑 */
-    .card_back {
-        position: absolute;
-        width: 15em;
-        height: 13em;
-        background-color: rgba(30, 31, 38, 0.95); /* 加深不透明度 */
-        border-radius: 7px;
-        margin-top: -4.7em;
-        margin-left: 0.7em;
-        transition: .2s ease-in-out;
-        z-index: -1;
-        top: 0;
-    }
-
-    .main-card-wrapper:hover .card_back {
-        margin-top: -5.9em;
-        margin-left: 0em;
-        scale: 1.1;
-        height: 15.25em;
-        cursor: pointer;
-    }
-
-    .data {
-        display: flex;
-        flex-direction: row;
-        margin-top: 1em;
-        padding: 0.5em; /* 增加内边距防止贴边 */
-    }
-
-    .img {
-        width: 2.25em;
-        height: 2.25em;
-        background-color: #252525;
-        border-radius: 5px;
-        overflow: hidden;
-    }
-
-    .text {
-        display: flex;
-        justify-content: center;
         flex-direction: column;
-        margin-left: 0.5em;
-        font-family: Montserrat;
-        color: white;
-    }
-
-    .text_m {
-        font-weight: bold;
-        font-size: 0.9em;
-    }
-
-    .text_s {
-        font-size: 0.7em;
-    }
-
-    .btns {
-        display: flex;
-        gap: 0.5em;
-        transition: .2s ease-in-out;
-        padding: 0.5em;
-        justify-content: center;
-    }
-
-    /* 按钮通用样式 */
-    .likes, .comments, .views {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 2.5em;
-        height: 1.4em;
-        border-radius: 4px;
-        margin-top: -0.5em;
-        opacity: 0;
-        background-color: #444857;
-        transition: .2s ease-in-out;
-    }
-
-    .main-card-wrapper:hover .likes,
-    .main-card-wrapper:hover .comments,
-    .main-card-wrapper:hover .views {
-        margin-top: 0.5em;
-        opacity: 1;
-    }
-
-    .likes:hover, .comments:hover, .views:hover {
-        background-color: #5A5F73;
-        cursor: pointer;
-    }
-
-    .likes_text, .comments_text, .views_text {
-        font-family: Montserrat;
-        font-size: 0.6em; /* 稍微调小字体以适应 SV G*/
-        margin-left: 0.25em;
-        color: white;
-        display: none; /* 默认隐藏文字，只显示图标，或者你可以去掉这行 */
-    }
-
-    .likes_svg, .comments_svg, .views_svg {
-        width: 12px;
-        height: 12px;
-        fill: white;
-    }
-
-    /* 核心链接按钮样式 */
-    .card_content {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: calc(100% - 3em); /* 减去顶部图标的高度 */
-    }
-
-    .card-link-btn {
-        padding: 0.8em;
-        width: 14em;
-        border-radius: 10px;
-        font-family: Montserrat;
-        font-size: 0.8em;
-        text-align: center;
+        justify-content: space-between;
+        height: 100%;
+        padding: 1.75rem;
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
         text-decoration: none;
-        outline: none;
+        color: inherit;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+        backdrop-filter: blur(10px);
+    }
+
+    /* 卡片悬停效果 */
+    .card:hover {
+        transform: translateY(-5px);
+        background: rgba(30, 41, 59, 0.9);
+        border-color: rgba(56, 189, 248, 0.3);
+        box-shadow:
+            0 20px 25px -5px rgba(0, 0, 0, 0.3),
+            0 10px 10px -5px rgba(0, 0, 0, 0.2),
+            0 0 15px rgba(56, 189, 248, 0.1);
+    }
+
+    /* 卡片内部 ID 装饰 (模拟 C++ 数组下标风格) */
+    .card-icon {
+        font-family: 'JetBrains Mono', monospace;
+        color: var(--primary);
+        font-size: 0.875rem;
+        margin-bottom: 1rem;
+        opacity: 0.7;
+    }
+
+    .card-icon span::before { content: "["; color: var(--text-muted); }
+    .card-icon span::after { content: "]"; color: var(--text-muted); }
+
+    .card-content h2 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        line-height: 1.4;
+        margin-bottom: 1rem;
+        color: var(--text-main);
+    }
+
+    /* 箭头动画 */
+    .arrow {
+        align-self: flex-end;
+        color: var(--primary);
         font-weight: bold;
-        border: 1px solid white;
-        background-color: transparent;
-        color: white;
-        transition: .4s ease-in-out;
-        position: relative;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }
-
-    .card-link-btn::after {
-        content: "(Enter)";
+        transition: transform 0.3s ease;
         opacity: 0;
-        position: absolute;
+        transform: translateX(-10px);
     }
 
-    .card-link-btn::before {
-        content: "∞";
-        font-size: 3.5em;
-        position: absolute;
-        opacity: 0;
-        left: 0.5em; /* 调整位置 */
-        top: -0.36em;
-        transition: .4s ease-in-out;
-    }
-
-    .card-link-btn:hover {
-        cursor: pointer;
-        color: black;
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 15px;
-        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-        backdrop-filter: blur(5px);
-        -webkit-backdrop-filter: blur(5px);
-        border: 1px solid rgba(255, 255, 255, 0.3);
-    }
-
-    .card-link-btn:hover::after {
-        position: relative;
+    .card:hover .arrow {
         opacity: 1;
-        font-size: 0.7em;
-        margin-left: 5px;
-    }
-
-    .card-link-btn:active {
-        scale: 0.95;
+        transform: translateX(0);
     }
 
     /* 动画定义 */
-    @keyframes AnimationName {
-        0% { background-position: 0% 50% }
-        50% { background-position: 100% 50% }
-        100% { background-position: 0% 50% }
+    @keyframes fadeInDown {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 移动端适配 */
+    @media (max-width: 640px) {
+        h1 { font-size: 2.5rem; }
+        .container { padding: 3rem 1rem; }
     }
 </style>
 </body>
