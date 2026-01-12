@@ -17,5 +17,11 @@
 			"database_name": "cpp_origin",
 			"database_id": "52f433db-31d9-4870-b3ca-6434a7992af3"
 		}
+	],
+  "kv_namespaces": [
+		{
+			"binding": "checkidentity",
+			"id": "04386210368e460fa494df2318adf6ef"
+		}
 	]
 }

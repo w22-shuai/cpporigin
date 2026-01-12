@@ -8,6 +8,43 @@ const { results: categories } = await db.prepare('SELECT id, maintitle FROM cppO
 
 let errorMessage = "";
 
+
+const runtime = Astro.locals.runtime;
+const env = runtime?.env;
+const timenow = Math.floor(Date.now() / 1000);
+
+// =========================================================
+// 1. 24小时 Token 轮转逻辑
+// =========================================================
+let timelast = await env.checkidentity.get("time");
+timelast = timelast ? parseInt(timelast) : 0;
+if ((timenow - timelast) > 86400) {
+    const newToken = crypto.randomUUID();
+    await env.checkidentity.put('time', timenow.toString());
+    await env.checkidentity.put('cookie', newToken);
+    return Astro.redirect("/login");
+}
+
+
+    let message = "";
+    let status = ""; // "success" | "error"
+
+// =========================================================
+// 2. 鉴权逻辑
+// =========================================================
+    const userToken = Astro.cookies.get("auth_token")?.value;
+    let serverToken = null;
+
+    if (env?.checkidentity) {
+        serverToken = await env.checkidentity.get("cookie");
+    }
+
+    if (!userToken || !serverToken || userToken !== serverToken) {
+        Astro.cookies.delete("auth_token", { path: "/" });
+        return Astro.redirect("/login"); // 确保这里重定向路径是你想要的
+    }
+
+
 // 处理表单提交
 if (Astro.request.method === "POST") {
   try {
