@@ -44,7 +44,7 @@ const { results: posts } = await db.prepare(
                 <li>
                     <!-- 点击标题跳转到文章详情页 (下一级页面) -->
                     <!-- 路径格式：/post/文章ID -->
-                    <a href={`/post/${post.id}`}>
+                    <a href={`/source/${post.id}`}>
                         {post.title}
                     </a>
                 </li>
