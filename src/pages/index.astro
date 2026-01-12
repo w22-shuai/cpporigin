@@ -1,14 +1,15 @@
 ---
-// 1. 获取 D1 数据库连接
 const db = Astro.locals.runtime.env.cpporigin;
-
-// 2. 查询分类表
-// 对应截图：cppOriginIndex (id, maintitle)
 const { results } = await db.prepare('SELECT id, maintitle FROM cppOriginIndex').all();
 ---
 
-<html>
+<!DOCTYPE html>
+<html lang="zh-cn">
 <head>
+    <!-- 关键是下面这一行！必须要加！ -->
+    <meta charset="utf-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>我的博客</title>
 </head>
 <body>
@@ -16,7 +17,6 @@ const { results } = await db.prepare('SELECT id, maintitle FROM cppOriginIndex')
     <ul>
         {results.map((item: any) => (
             <li>
-                {/* 点击跳转到分类页，路径带上 id */}
                 <a href={`/category/${item.id}`}>
                     {item.maintitle}
                 </a>
