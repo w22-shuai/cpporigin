@@ -4,10 +4,9 @@ const { id } = Astro.params;
 const db = Astro.locals.runtime.env.cpporigin;
 
 // 2. 查询文章详情
-// 我们使用 SELECT *，这样既能拿到 content，也能拿到 category_id (方便做返回按钮)
 const post = await db.prepare('SELECT * FROM cppOriginContent WHERE id = ?').bind(id).first();
 
-// 3. 处理文章不存在的情况 (比如用户乱输了一个 id)
+// 3. 处理文章不存在的情况
 if (!post) {
     return new Response('404: 文章不存在', { status: 404 });
 }
@@ -17,28 +16,103 @@ if (!post) {
 <html lang="zh-cn">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{post.title}</title>
 
+    <!-- 1. CSS 主题 (VS Code Dark Plus) - 用于代码高亮 -->
+    <link href="https://cdn.jsdelivr.net/npm/prism-themes@1.9.0/themes/prism-vsc-dark-plus.min.css" rel="stylesheet" />
+
+    <!-- 2. JS Beautify -->
+    <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/js-beautify/1.14.7/beautify.min.js"></script>
+
     <style>
-        /* 简单的样式优化 */
+        /* --- 全局设置 --- */
         body {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            font-family: sans-serif;
+            /* 页面浅灰色背景 */
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+            /* Js字体 / 代码风格字体 */
+            font-family: 'Fira Code', Consolas, 'Courier New', monospace;
+            color: #333;
             line-height: 1.6;
         }
+
+        /* --- 顶部导航栏 (复刻截图的深色条) --- */
+        nav {
+            background-color: #2d2a2e; /* 深褐色/深灰色背景 */
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between; /* 左右两端对齐 */
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        /* --- 按钮通用样式 --- */
+        .btn {
+            background-color: #1e1e1e; /* 按钮内部深色背景 */
+            text-decoration: none;
+            padding: 8px 20px;
+            border-radius: 4px;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            background-color: #333;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
+        }
+
+        /* --- 左侧按钮风格 (青色 - 对应截图 "提交完成项") --- */
+        .btn-cyan {
+            border: 1px solid #00E5FF; /* 青色边框 */
+            color: #00E5FF;            /* 青色文字 */
+        }
+
+        /* --- 右侧按钮风格 (绿色 - 对应截图 "插入问题") --- */
+        .btn-green {
+            border: 1px solid #00FF00; /* 绿色边框 */
+            color: #00FF00;            /* 绿色文字 */
+        }
+
+        /* --- 主要内容区域 --- */
+        article {
+            max-width: 800px;
+            margin: 40px auto;
+            background: #fff; /* 内容区白色背景，突出文字 */
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        /* --- 标题居中 --- */
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #1a1a1a;
+            font-size: 1.8rem;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 15px;
+        }
+
+        /* --- 正文内容 --- */
         .content {
-            /* 关键样式：保留数据库文本里的换行和空格 */
+            /* 保留数据库文本里的换行和空格 */
             white-space: pre-wrap;
             font-size: 1.1em;
-            color: #333;
+            color: #444;
+            /* 确保长单词或代码自动换行 */
+            word-wrap: break-word;
         }
-        .meta {
-            color: #666;
-            font-size: 0.9em;
-            margin-bottom: 20px;
+
+        /* 针对可能存在的代码块的简单优化 */
+        pre {
+            background: #1e1e1e !important;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
         }
     </style>
 </head>
@@ -46,22 +120,21 @@ if (!post) {
 
     <!-- 顶部导航 -->
     <nav>
-        <!-- 聪明的设计：点击返回可以回到该文章所属的分类列表，而不是直接回首页 -->
-        <a href={`/category/${post.category_id}`} style="text-decoration: none;">
-            ← 返回上级列表
+        <!-- 左侧按钮：模仿 "提交完成项" 风格 -->
+        <a href={`/category/${post.category_id}`} class="btn btn-cyan">
+            ← 返回列表
         </a>
-        <span style="margin: 0 10px;">|</span>
-        <a href="/" style="text-decoration: none;">回首页</a>
+
+        <!-- 右侧按钮：模仿 "插入问题" 风格 -->
+        <a href="/" class="btn btn-green">
+            回首页
+        </a>
     </nav>
 
-    <hr />
-
+    <!-- 文章内容 -->
     <article>
         <!-- 标题 -->
         <h1>{post.title}</h1>
-
-        <!-- 如果你有 created_at 字段，可以在这里显示时间，没有也没关系 -->
-        <!-- <div class="meta">发布时间：{post.created_at}</div> -->
 
         <!-- 正文内容 -->
         <div class="content">
