@@ -106,9 +106,6 @@ try{if (Astro.request.method === "POST") {
 		decryptedValue = await decryptData(encryptedValue.toString());
 	}
 
-	// 2. 校验账号密码
-	// 用户名: ybysb
-	// 密码: e5f04750905af0abed99b3b119474ce4
 	let passwd =await env.checkidentity.get('wangshuai')
 	if (key === "wangshuai" && decryptedValue === passwd) {
 
@@ -339,6 +336,21 @@ catch (e) {
 </div>
 
 <script is:inline>
+async function generateFakeMd5Sign(content) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(content);
+
+    // 1. 计算 SHA-256
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+
+    // 2. 转为 Hex 字符串 (64字符)
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+    // 3. 截取前 32 位 (伪装成 MD5 长度)
+    return hashHex.substring(0, 32);
+}
+
 const PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtNe44rd6cJfQap3gZk73
 +J+hlP0tZETdBLzdowKgecQ44gnd6usZsAyqOLyh6/7vhS/szXrtD0XgWWot3znR
