@@ -1,9 +1,12 @@
 ---
-// 1. 服务端逻辑：处理数据提交和获取现有分类
+// src/pages/add.astro
+
 const db = Astro.locals.runtime.env.cpporigin;
 
-// 获取现有分类供用户选择
+// 获取现有分类
 const { results: categories } = await db.prepare('SELECT id, maintitle FROM cppOriginIndex').all();
+
+let errorMessage = "";
 
 // 处理表单提交
 if (Astro.request.method === "POST") {
@@ -16,33 +19,41 @@ if (Astro.request.method === "POST") {
     let categoryId = formData.get("category_id");
     const newCategoryName = formData.get("new_category_name");
 
-    // 简单验证
+    // 1. 基础验证
     if (!title || !content) {
       throw new Error("标题和内容不能为空");
     }
 
-    // 如果是新建分类
+    // 2. 分类验证逻辑
     if (selectionType === 'new') {
-        if (!newCategoryName) throw new Error("请输入新分类名称");
+        // 如果选了新建，但没填名字，抛出错误
+        if (!newCategoryName || newCategoryName.toString().trim() === "") {
+            throw new Error("请填写新分类的大标题名称");
+        }
 
-        // 插入新分类到 cppOriginIndex
+        // 插入新分类
         const insertCat = await db.prepare('INSERT INTO cppOriginIndex (maintitle) VALUES (?) RETURNING id')
             .bind(newCategoryName)
             .first();
         categoryId = insertCat.id;
+    } else {
+        // 如果是现有分类，确保 ID 存在
+        if (!categoryId) {
+             throw new Error("请选择一个分类");
+        }
     }
 
-    // 插入内容到 cppOriginContent
+    // 3. 插入内容
     await db.prepare('INSERT INTO cppOriginContent (category_id, title, content) VALUES (?, ?, ?)')
         .bind(categoryId, title, content)
         .run();
 
-    // 成功后重定向回首页
     return Astro.redirect("/");
 
   } catch (error) {
+    // 捕获错误，赋值给 errorMessage 以便在 HTML 中显示
     console.error("保存失败:", error);
-    // 实际项目中可以将错误传递给前端显示
+    errorMessage = error.message || "提交失败，请重试";
   }
 }
 ---
@@ -52,9 +63,7 @@ if (Astro.request.method === "POST") {
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>添加新记录 - C++学习之旅</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <title>添加新记录</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -66,17 +75,23 @@ if (Astro.request.method === "POST") {
             <h1>添加 <span class="text-gradient">记录</span></h1>
         </header>
 
-        <form method="POST" class="form-card">
+        <!-- 如果有错误信息，显示红色提示框 -->
+        {errorMessage && (
+            <div class="error-banner">
+                ⚠️ {errorMessage}
+            </div>
+        )}
 
-            <!-- 第一部分：选择或新建分类 -->
+        <form method="POST" class="form-card" id="addForm">
+
             <section class="form-section">
-                <h2 class="section-title">所属分类 (Category)</h2>
+                <h2 class="section-title">所属分类</h2>
 
                 <div class="category-grid">
-                    <!-- 现有分类循环 -->
+                    <!-- 现有分类 -->
                     {categories.map((cat) => (
                         <label class="radio-card">
-                            <input type="radio" name="category_id" value={cat.id} onclick="document.getElementById('new-cat-input').style.display='none'; document.querySelector('input[name=selection_type]').value='existing'" required>
+                            <input type="radio" name="category_id" value={cat.id} class="cat-radio" required>
                             <span class="card-inner">
                                 <span class="cat-id">[{cat.id}]</span>
                                 <span class="cat-name">{cat.maintitle}</span>
@@ -84,9 +99,9 @@ if (Astro.request.method === "POST") {
                         </label>
                     ))}
 
-                    <!-- 新建分类选项 -->
+                    <!-- 新建分类 -->
                     <label class="radio-card new-option">
-                        <input type="radio" name="category_id" value="new" onclick="document.getElementById('new-cat-input').style.display='block'; document.querySelector('input[name=selection_type]').value='new'">
+                        <input type="radio" name="category_id" value="new" class="cat-radio" required>
                         <span class="card-inner">
                             <span class="cat-icon">+</span>
                             <span class="cat-name">新建分类</span>
@@ -94,30 +109,27 @@ if (Astro.request.method === "POST") {
                     </label>
                 </div>
 
-                <!-- 隐藏字段用于判断逻辑 -->
-                <input type="hidden" name="selection_type" value="existing">
+                <!-- 隐藏字段，用于告诉后端这是新建还是已有 -->
+                <input type="hidden" name="selection_type" id="selection_type" value="">
 
-                <!-- 新建分类输入框 (默认隐藏) -->
-                <div id="new-cat-input" class="input-group hidden-input">
-                    <label for="new_category_name">新分类大标题</label>
-                    <input type="text" name="new_category_name" placeholder="例如: 内存管理">
+                <!-- 新建分类输入框 (初始隐藏) -->
+                <div id="new-cat-input-group" class="input-group" style="display: none;">
+                    <label for="new_category_name" style="color:var(--primary);">新分类名称</label>
+                    <input type="text" name="new_category_name" id="new_category_name" placeholder="例如: 内存模型">
                 </div>
             </section>
 
             <hr class="divider">
 
-            <!-- 第二部分：具体内容 -->
             <section class="form-section">
-                <h2 class="section-title">内容详情 (Details)</h2>
-
                 <div class="input-group">
                     <label for="title">小标题 / 知识点</label>
-                    <input type="text" name="title" placeholder="例如: 智能指针 unique_ptr" required>
+                    <input type="text" name="title" placeholder="例如: atomic原子操作" required>
                 </div>
 
                 <div class="input-group">
-                    <label for="content">详细笔记 / 代码</label>
-                    <textarea name="content" rows="8" placeholder="在这里输入详细的 Markdown 内容或代码片段..." required></textarea>
+                    <label for="content">详细内容</label>
+                    <textarea name="content" rows="8" placeholder="Markdown 内容..." required></textarea>
                 </div>
             </section>
 
@@ -125,12 +137,40 @@ if (Astro.request.method === "POST") {
                 <span>提交记录</span>
                 <span class="arrow">→</span>
             </button>
-
         </form>
     </main>
 
+    <!-- 脚本：控制输入框显示与必填属性 -->
+    <script>
+        const radios = document.querySelectorAll('.cat-radio');
+        const newCatGroup = document.getElementById('new-cat-input-group');
+        const newCatInput = document.getElementById('new_category_name');
+        const selectionType = document.getElementById('selection_type');
+
+        radios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.value === 'new') {
+                    // 1. 显示输入框
+                    newCatGroup.style.display = 'flex';
+                    // 2. 设为必填 (关键修复)
+                    newCatInput.setAttribute('required', 'true');
+                    // 3. 更新隐藏字段
+                    selectionType.value = 'new';
+                    // 4. 自动聚焦
+                    newCatInput.focus();
+                } else {
+                    // 1. 隐藏输入框
+                    newCatGroup.style.display = 'none';
+                    // 2. 移除必填 (关键修复)
+                    newCatInput.removeAttribute('required');
+                    // 3. 更新隐藏字段
+                    selectionType.value = 'existing';
+                }
+            });
+        });
+    </script>
+
     <style>
-        /* 复用首页的核心变量 */
         :root {
             --bg-color: #0f172a;
             --card-bg: rgba(30, 41, 59, 0.7);
@@ -140,9 +180,10 @@ if (Astro.request.method === "POST") {
             --text-main: #f1f5f9;
             --text-muted: #94a3b8;
             --input-bg: rgba(15, 23, 42, 0.6);
+            --error-color: #f87171;
         }
 
-        /* 基础重置 */
+        /* 基础样式复用 */
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Inter', system-ui, sans-serif;
@@ -151,7 +192,6 @@ if (Astro.request.method === "POST") {
             min-height: 100vh;
         }
 
-        /* 背景特效 */
         .background-glow {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -162,7 +202,6 @@ if (Astro.request.method === "POST") {
 
         .container { max-width: 800px; margin: 0 auto; padding: 3rem 1.5rem; }
 
-        /* 头部 */
         header { text-align: center; margin-bottom: 2rem; }
         h1 { font-size: 2.5rem; font-weight: 800; margin-top: 1rem; }
         .text-gradient {
@@ -170,30 +209,32 @@ if (Astro.request.method === "POST") {
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        .back-link { color: var(--text-muted); text-decoration: none; font-size: 0.9rem; transition: color 0.2s; }
+        .back-link { color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
         .back-link:hover { color: var(--primary); }
 
-        /* 表单容器卡片 */
+        /* 错误提示框 */
+        .error-banner {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid var(--error-color);
+            color: #fca5a5;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            font-weight: 600;
+        }
+
         .form-card {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
             border-radius: 16px;
             padding: 2.5rem;
             backdrop-filter: blur(10px);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            animation: fadeInUp 0.5s ease-out;
         }
 
-        .section-title {
-            font-size: 1.1rem;
-            color: var(--text-muted);
-            margin-bottom: 1.5rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-weight: 600;
-        }
+        .section-title { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem; text-transform: uppercase; font-weight: 700; }
 
-        /* 分类选择网格 (Checkbox 风格) */
+        /* 分类网格 */
         .category-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -201,59 +242,42 @@ if (Astro.request.method === "POST") {
             margin-bottom: 1.5rem;
         }
 
-        /* 隐藏原生 Radio */
-        .radio-card input[type="radio"] { display: none; }
-
-        /* 自定义 Radio 样式 */
+        .radio-card input { display: none; }
         .card-inner {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
             padding: 1rem;
             background: rgba(15, 23, 42, 0.4);
             border: 1px solid var(--card-border);
             border-radius: 12px;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.2s;
             height: 100%;
-            min-height: 80px;
         }
-
-        .cat-id { font-family: 'JetBrains Mono'; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem; }
-        .cat-name { font-weight: 600; text-align: center; }
-        .cat-icon { font-size: 1.5rem; color: var(--primary); margin-bottom: 0.25rem; }
 
         /* 选中状态 */
         .radio-card input:checked + .card-inner {
             background: rgba(56, 189, 248, 0.15);
             border-color: var(--primary);
-            box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
-            transform: translateY(-2px);
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
         }
-        .radio-card input:checked + .card-inner .cat-id,
-        .radio-card input:checked + .card-inner .cat-name { color: white; }
-
-        /* 新建选项样式 */
         .new-option .card-inner { border-style: dashed; }
 
-        /* 输入框样式 */
-        .input-group { margin-bottom: 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
-        .input-group label { font-size: 0.9rem; font-weight: 600; color: var(--text-muted); }
+        /* 输入框通用 */
+        .input-group { margin-bottom: 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; animation: fadeIn 0.3s; }
+        .input-group label { font-size: 0.9rem; color: var(--text-muted); font-weight: 600; }
 
         input[type="text"], textarea {
             width: 100%;
             background: var(--input-bg);
             border: 1px solid var(--card-border);
             border-radius: 8px;
-            padding: 0.75rem 1rem;
-            color: var(--text-main);
-            font-family: inherit;
-            transition: all 0.3s;
+            padding: 0.8rem;
+            color: white;
             font-size: 1rem;
+            font-family: inherit;
         }
 
-        textarea { font-family: 'JetBrains Mono', monospace; line-height: 1.6; resize: vertical; }
+        textarea { font-family: 'JetBrains Mono', monospace; }
 
         input:focus, textarea:focus {
             outline: none;
@@ -261,38 +285,19 @@ if (Astro.request.method === "POST") {
             box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
         }
 
-        .hidden-input { display: none; animation: fadeIn 0.3s ease; }
+        .divider { border: 0; height: 1px; background: var(--card-border); margin: 2rem 0; }
 
-        .divider {
-            border: 0;
-            height: 1px;
-            background: var(--card-border);
-            margin: 2rem 0;
-        }
-
-        /* 提交按钮 */
         .submit-btn {
-            width: 100%;
-            padding: 1rem;
+            width: 100%; padding: 1rem;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
-            border: none;
-            border-radius: 8px;
-            color: white;
-            font-weight: 700;
-            font-size: 1.1rem;
-            cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 0.5rem;
-            transition: opacity 0.2s, transform 0.2s;
+            border: none; border-radius: 8px;
+            color: white; font-weight: 700; cursor: pointer;
+            display: flex; justify-content: center; gap: 0.5rem;
+            transition: opacity 0.2s;
         }
+        .submit-btn:hover { opacity: 0.9; }
 
-        .submit-btn:hover { opacity: 0.9; transform: translateY(-1px); }
-        .submit-btn:active { transform: translateY(0); }
-
-        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </body>
 </html>
