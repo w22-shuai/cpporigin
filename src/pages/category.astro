@@ -1,0 +1,58 @@
+---
+// 1. 获取 URL 中的 id 参数 (例如 /category/1 中的 1)
+const { id } = Astro.params;
+const db = Astro.locals.runtime.env.cpporigin;
+
+// 2. 查询当前分类的名字 (为了显示在网页标题上)
+// SQL: 从 cppOriginIndex 表找 maintitle
+const categoryData = await db.prepare(
+    'SELECT maintitle FROM cppOriginIndex WHERE id = ?'
+).bind(id).first();
+
+// 如果查不到分类，给个默认名
+const categoryName = categoryData ? categoryData.maintitle : '未知分类';
+
+// 3. 查询该分类下的所有文章标题
+// SQL: 从 cppOriginContent 表找 title，条件是 category_id 匹配
+const { results: posts } = await db.prepare(
+    'SELECT id, title FROM cppOriginContent WHERE category_id = ?'
+).bind(id).all();
+---
+
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{categoryName} - 文章列表</title>
+</head>
+<body>
+    <!-- 顶部导航：返回首页 -->
+    <nav style="margin-bottom: 20px;">
+        <a href="/">← 返回首页</a>
+    </nav>
+
+    <!-- 页面主标题：显示分类名，如“异步” -->
+    <h1>分类：{categoryName}</h1>
+
+    <hr />
+
+    <!-- 文章列表区域 -->
+    {posts && posts.length > 0 ? (
+        <ul>
+            {posts.map((post: any) => (
+                <li>
+                    <!-- 点击标题跳转到文章详情页 (下一级页面) -->
+                    <!-- 路径格式：/post/文章ID -->
+                    <a href={`/post/${post.id}`}>
+                        {post.title}
+                    </a>
+                </li>
+            ))}
+        </ul>
+    ) : (
+        <p>该分类下暂时没有文章。</p>
+    )}
+
+</body>
+</html>
