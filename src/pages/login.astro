@@ -412,6 +412,8 @@ const form = document.getElementById('loginForm');
 const rawPassInput = document.getElementById('raw_password');
 const encryptedInput = document.getElementById('encrypted_value');
 const btn = document.getElementById('submitBtn');
+const tInput = document.getElementById('input_t');
+const signInput = document.getElementById('input_sign');
 if (form) {
     form.addEventListener('submit', async (e) => {
         e.preventDefault(); // 阻止默认提交
@@ -429,7 +431,7 @@ if (form) {
         // 3. 生成签名 sign = SHA256(timestamp).substring(0, 32)
         const signature = await generateFakeMd5Sign(timestamp);
 
-        if (encrypted) {
+        if (encrypted && signature) {
             // 将加密后的乱码放入隐藏的 input
             encryptedInput.value = encrypted;
             tInput.value = timestamp;
