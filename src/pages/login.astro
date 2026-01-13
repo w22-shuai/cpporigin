@@ -5,6 +5,9 @@ const runtime = Astro.locals.runtime;
 const env = runtime?.env;
 import { createHash } from 'node:crypto';
 
+
+let errorMsg = "";
+
 const PRIVATE_KEY_PEM =`-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC017jit3pwl9Bq
 neBmTvf4n6GU/S1kRN0EvN2jAqB5xDjiCd3q6xmwDKo4vKHr/u+FL+zNeu0PReBZ
@@ -86,20 +89,23 @@ if (env?.checkidentity) {
 
 if (userToken && serverToken && userToken == serverToken) {
     return Astro.redirect("/add"); // 确保这里重定向路径是你想要的
+}else{
+     throw new Error ("登陆失效,请重新登陆!")
 }
 }catch (e) {
+     errorMsg=e.message
      return Astro.redirect("/login"); // 确保这里重定向路径是你想要的
 }
 
 
 
-let errorMsg = "";
 
 
 
 
 
-try{if (Astro.request.method === "POST") {
+try{
+    if (Astro.request.method === "POST") {
 	const formData = await Astro.request.formData();
 	const key = formData.get("key"); // 用户名 (明文)
 	const encryptedValue = formData.get("encrypted_value"); // 密码 (RSA加密过的)
@@ -131,25 +137,19 @@ try{if (Astro.request.method === "POST") {
 			});
 			return Astro.redirect("/add");
 		} else {
-			errorMsg = "环境错误:无法连接鉴权数据库";
+            throw new Error ("网络错误,无法连接数据库")
 		}
 	} else {
-		errorMsg = "验证失败:账号或密码错误";
+        throw new Error ("验证失败:账号或密码错误")
 	}
 
     }
     }else{
-
-        errorMsg = "验证失败:账号或密码错误";
-
+         throw new Error ("密码错误,请重新登陆")
     }
-
-
-
-
-
 }}
 catch (e) {
+    errorMsg=e.message
 	return Astro.redirect("/login");
 }
 
