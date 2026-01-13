@@ -24,13 +24,18 @@
 	},
 	"private": true,
 	"scripts": {
-		"astro": "astro",
-		"build": "astro build",
-		"cf-typegen": "wrangler types",
-		"check": "astro build && tsc && wrangler deploy --dry-run",
-		"deploy": "wrangler deploy",
-		"dev": "astro dev",
-		"preview": "astro build && wrangler dev"
-	},
+    "astro": "astro",
+    "dev": "astro dev",
+    "start": "astro dev",
+    "preview": "astro build && wrangler dev",
+    "check": "astro build && tsc && wrangler deploy --dry-run",
+    "cf-typegen": "wrangler types",
+
+    "build": "astro build",
+
+    "deploy:web": "astro build && wrangler deploy",
+    "deploy:cron": "wrangler deploy --config js/wrangler.json",
+    "deploy": "npm run deploy:web && npm run deploy:cron"
+  },
 	"type": "module"
 }

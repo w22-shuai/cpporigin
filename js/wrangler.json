@@ -1,0 +1,15 @@
+{
+  "name": "cpporigin-cron-task",
+  "main": "renew.js",
+  "compatibility_date": "2025-10-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "checkidentity",
+      "id": "04386210368e460fa494df2318adf6ef"
+    }
+  ]
+}
