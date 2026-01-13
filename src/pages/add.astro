@@ -14,21 +14,23 @@ const env = runtime?.env;
 const timenow = Math.floor(Date.now() / 1000);
 
 
-let message = "";
-let status = ""; // "success" | "error"
 
 
-    const userToken = Astro.cookies.get("cf_token_kasada")?.value;
-    let serverToken = null;
+try{
+const userToken = Astro.cookies.get("cf_token_kasada")?.value;
+let serverToken = null;
 
-    if (env?.checkidentity) {
-        serverToken = await env.checkidentity.get("cookie");
-    }
+if (env?.checkidentity) {
+    serverToken = await env.checkidentity.get("cookie");
+}
 
-    if (!userToken || !serverToken || userToken !== serverToken) {
-        Astro.cookies.delete("cf_token_kasada", { path: "/" });
-        return Astro.redirect("/login"); // 确保这里重定向路径是你想要的
-    }
+if (!userToken || !serverToken || userToken !== serverToken) {
+    Astro.cookies.delete("cf_token_kasada", { path: "/" });
+    return Astro.redirect("/login"); // 确保这里重定向路径是你想要的
+}}catch(e){
+    return Astro.redirect("/login"); // 确保这里重定向路径是你想要的
+}
+
 
 
 // 处理表单提交
