@@ -3,7 +3,7 @@ export const prerender = false;
 
 const runtime = Astro.locals.runtime;
 const env = runtime?.env;
-
+import { createHash } from 'node:crypto';
 
 const PRIVATE_KEY_PEM =`-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC017jit3pwl9Bq
@@ -99,8 +99,15 @@ try{if (Astro.request.method === "POST") {
 	const formData = await Astro.request.formData();
 	const key = formData.get("key"); // 用户名 (明文)
 	const encryptedValue = formData.get("encrypted_value"); // 密码 (RSA加密过的)
+    const timestamp= formData.get("t");
+    const sign=formData.get("sign");
 
-	// 1. 解密密码
+    if(timestamp&&sign){
+    const fullHash = createHash('sha256').update(timestamp.toString()).digest('hex');
+    const sign_front = fullHash.substring(0, 32);
+    if(sign_front==sign){
+
+        	// 1. 解密密码
 	let decryptedValue = null;
 	if (encryptedValue) {
 		decryptedValue = await decryptData(encryptedValue.toString());
@@ -124,8 +131,17 @@ try{if (Astro.request.method === "POST") {
 		}
 	} else {
 		errorMsg = "⚠️ 验证失败：账号或密码错误";
-		// 如果解密失败，decryptedValue 为 null，也会走这里
 	}
+
+    }
+    }else{
+        return Astro.redirect("/login");
+    }
+
+
+
+
+
 }}
 catch (e) {
 	return Astro.redirect("/login");
