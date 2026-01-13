@@ -77,7 +77,7 @@ async function decryptData(encryptedBase64) {
 
 
 try{
-    const userToken = Astro.cookies.get("cf_token_kasada")?.value;
+const userToken = Astro.cookies.get("cf_token_kasada")?.value;
 let serverToken = null;
 
 if (env?.checkidentity) {
