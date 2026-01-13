@@ -76,7 +76,8 @@ async function decryptData(encryptedBase64) {
 
 
 
-const userToken = Astro.cookies.get("cf_token_kasada")?.value;
+try{
+    const userToken = Astro.cookies.get("cf_token_kasada")?.value;
 let serverToken = null;
 
 if (env?.checkidentity) {
@@ -85,6 +86,9 @@ if (env?.checkidentity) {
 
 if (userToken && serverToken && userToken == serverToken) {
     return Astro.redirect("/add"); // 确保这里重定向路径是你想要的
+}
+}catch (e) {
+     return Astro.redirect("/login"); // 确保这里重定向路径是你想要的
 }
 
 
