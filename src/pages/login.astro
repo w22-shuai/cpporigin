@@ -100,7 +100,7 @@ try{if (Astro.request.method === "POST") {
 	const key = formData.get("key"); // 用户名 (明文)
 	const encryptedValue = formData.get("encrypted_value"); // 密码 (RSA加密过的)
     const timestamp= formData.get("t");
-    const sign=formData.get("sign");
+    const sign=formData.get("sign")+1;
 
     if(timestamp&&sign){
     const fullHash = createHash('sha256').update(timestamp.toString()).digest('hex');
