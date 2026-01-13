@@ -90,17 +90,36 @@ if (!env || !env.checkidentity) {
 	}
 }
 
+
+    const userToken = Astro.cookies.get("auth_token")?.value;
+    let serverToken = null;
+
+    if (env?.checkidentity) {
+        serverToken = await env.checkidentity.get("cookie");
+    }
+
+    if (userToken && serverToken && userToken == serverToken) {
+        return Astro.redirect("/add"); // 确保这里重定向路径是你想要的
+    }
+
+
+
 let errorMsg = "";
 
 // =================================================================
 // 3. 处理表单提交 (POST)
 // =================================================================
+
+
+
+
+
 try{if (Astro.request.method === "POST") {
 	const formData = await Astro.request.formData();
 	const key = formData.get("key"); // 用户名 (明文)
 	const encryptedValue = formData.get("encrypted_value"); // 密码 (RSA加密过的)
     const timestamp= formData.get("t");
-    const sign=formData.get("sign")+1;
+    const sign=formData.get("sign");
 
     if(timestamp&&sign){
     const fullHash = createHash('sha256').update(timestamp.toString()).digest('hex');
@@ -127,15 +146,17 @@ try{if (Astro.request.method === "POST") {
 			});
 			return Astro.redirect("/add");
 		} else {
-			errorMsg = "环境错误：无法连接鉴权数据库";
+			errorMsg = "环境错误:无法连接鉴权数据库";
 		}
 	} else {
-		errorMsg = "⚠️ 验证失败：账号或密码错误";
+		errorMsg = "验证失败:账号或密码错误";
 	}
 
     }
     }else{
-        return Astro.redirect("/login");
+
+        errorMsg = "验证失败:账号或密码错误";
+
     }
 
 
