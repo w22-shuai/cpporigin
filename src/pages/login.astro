@@ -89,7 +89,7 @@ if (env?.checkidentity) {
 
 if (userToken && serverToken && userToken == serverToken) {
     return Astro.redirect("/add"); // 确保这里重定向路径是你想要的
-}else{
+}else if(userToken && serverToken && userToken != serverToken) {
      throw new Error ("登陆失效,请重新登陆!")
 }
 }catch (e) {
@@ -123,24 +123,25 @@ try{
         }
 
         let passwd =await env.checkidentity.get('wangshuai')
-        if (key === "wangshuai" && decryptedValue === passwd) {
+            if (key === "wangshuai" && decryptedValue === passwd) {
 
-            if (env?.checkidentity) {
-                const validToken = await env.checkidentity.get('cookie');
-                // 设置 Cookie
-                Astro.cookies.set("cf_token_kasada", validToken, {
-                    path: "/",
-                    maxAge: 86400,
-                    httpOnly: true,
-                    secure: true
-                });
-                return Astro.redirect("/add");
-            } else {
-                throw new Error ("网络错误,无法连接数据库")
+                if (env?.checkidentity) {
+                    const validToken = await env.checkidentity.get('cookie');
+                    // 设置 Cookie
+                    Astro.cookies.set("cf_token_kasada", validToken, {
+                        path: "/",
+                        maxAge: 86400,
+                        httpOnly: true,
+                        secure: true
+                    });
+                    return Astro.redirect("/add");
+                } else {
+                    throw new Error ("网络错误,无法连接数据库")
+                }
             }
-        } else {
-            throw new Error ("验证失败:账号或密码错误")
-        }
+            else {
+                throw new Error ("验证失败:账号或密码错误")
+            }
 
         }else{
             throw new Error ("不要爆破加密信息")
