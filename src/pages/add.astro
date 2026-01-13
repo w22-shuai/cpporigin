@@ -295,7 +295,10 @@ if (Astro.request.method === "POST") {
             font-family: inherit;
         }
 
-        textarea { font-family: 'JetBrains Mono', monospace; }
+        textarea {
+    font-family: 'JetBrains Mono', monospace;
+    resize: none; /* 添加这一行，禁止拖动调整大小 */
+}
 
         input:focus, textarea:focus {
             outline: none;
