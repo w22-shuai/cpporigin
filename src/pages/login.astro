@@ -112,37 +112,39 @@ try{
     const sign=formData.get("sign");
 
     if(timestamp&&sign){
-    const fullHash = createHash('sha256').update(timestamp.toString()).digest('hex');
-    const sign_front = fullHash.substring(0, 32);
-    if(sign_front==sign){
+        const fullHash = createHash('sha256').update(timestamp.toString()).digest('hex');
+        const sign_front = fullHash.substring(0, 32);
+        if(sign_front==sign){
 
-        	// 1. 解密密码
-	let decryptedValue = null;
-	if (encryptedValue) {
-		decryptedValue = await decryptData(encryptedValue.toString());
-	}
+                // 1. 解密密码
+        let decryptedValue = null;
+        if (encryptedValue) {
+            decryptedValue = await decryptData(encryptedValue.toString());
+        }
 
-	let passwd =await env.checkidentity.get('wangshuai')
-	if (key === "wangshuai" && decryptedValue === passwd) {
+        let passwd =await env.checkidentity.get('wangshuai')
+        if (key === "wangshuai" && decryptedValue === passwd) {
 
-		if (env?.checkidentity) {
-			const validToken = await env.checkidentity.get('cookie');
-			// 设置 Cookie
-			Astro.cookies.set("cf_token_kasada", validToken, {
-				path: "/",
-				maxAge: 86400,
-				httpOnly: true,
-				secure: true
-			});
-			return Astro.redirect("/add");
-		} else {
-            throw new Error ("网络错误,无法连接数据库")
-		}
-	} else {
-        throw new Error ("验证失败:账号或密码错误")
-	}
+            if (env?.checkidentity) {
+                const validToken = await env.checkidentity.get('cookie');
+                // 设置 Cookie
+                Astro.cookies.set("cf_token_kasada", validToken, {
+                    path: "/",
+                    maxAge: 86400,
+                    httpOnly: true,
+                    secure: true
+                });
+                return Astro.redirect("/add");
+            } else {
+                throw new Error ("网络错误,无法连接数据库")
+            }
+        } else {
+            throw new Error ("验证失败:账号或密码错误")
+        }
 
-    }
+        }else{
+            throw new Error ("不要爆破加密信息")
+        }
     }else{
          throw new Error ("密码错误,请重新登陆")
     }
