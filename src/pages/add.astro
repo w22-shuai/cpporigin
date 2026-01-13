@@ -133,7 +133,7 @@ if (Astro.request.method === "POST") {
                 <!-- 新建分类输入框 (初始隐藏) -->
                 <div id="new-cat-input-group" class="input-group" style="display: none;">
                     <label for="new_category_name" style="color:var(--primary);">新分类名称</label>
-                    <input type="text" name="new_category_name" id="new_category_name" placeholder="例如: 内存模型">
+                    <input type="text" name="new_category_name" id="new_category_name">
                 </div>
             </section>
 
@@ -142,12 +142,12 @@ if (Astro.request.method === "POST") {
             <section class="form-section">
                 <div class="input-group">
                     <label for="title">小标题 / 知识点</label>
-                    <input type="text" name="title" placeholder="例如: atomic原子操作" required>
+                    <input type="text" name="title"  required>
                 </div>
 
                 <div class="input-group">
                     <label for="content">详细内容</label>
-                    <textarea name="content" rows="8" placeholder="Markdown 内容..." required></textarea>
+                    <textarea name="content" rows="8"  required></textarea>
                 </div>
             </section>
 
