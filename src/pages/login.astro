@@ -74,41 +74,22 @@ async function decryptData(encryptedBase64) {
 }
 
 
-if (!env || !env.checkidentity) {
-	// throw new Error("请确保 wrangler.toml 绑定了 checkidentity KV");
-	// 为了不让页面挂掉，本地开发时这里不抛错，只是不能登录
-} else {
-	const timenow = Math.floor(Date.now() / 1000);
-	let timelast = await env.checkidentity.get("time");
-	timelast = timelast ? parseInt(timelast) : 0;
 
-	if ((timenow - timelast) > 86400) {
-		const newToken = crypto.randomUUID();
-		await env.checkidentity.put('time', timenow.toString());
-		await env.checkidentity.put('cookie', newToken);
-		return Astro.redirect("/login");
-	}
+
+const userToken = Astro.cookies.get("auth_token")?.value;
+let serverToken = null;
+
+if (env?.checkidentity) {
+    serverToken = await env.checkidentity.get("cookie");
 }
 
-
-    const userToken = Astro.cookies.get("auth_token")?.value;
-    let serverToken = null;
-
-    if (env?.checkidentity) {
-        serverToken = await env.checkidentity.get("cookie");
-    }
-
-    if (userToken && serverToken && userToken == serverToken) {
-        return Astro.redirect("/add"); // 确保这里重定向路径是你想要的
-    }
+if (userToken && serverToken && userToken == serverToken) {
+    return Astro.redirect("/add"); // 确保这里重定向路径是你想要的
+}
 
 
 
 let errorMsg = "";
-
-// =================================================================
-// 3. 处理表单提交 (POST)
-// =================================================================
 
 
 

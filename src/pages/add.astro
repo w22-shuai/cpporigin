@@ -13,25 +13,11 @@ const runtime = Astro.locals.runtime;
 const env = runtime?.env;
 const timenow = Math.floor(Date.now() / 1000);
 
-// =========================================================
-// 1. 24小时 Token 轮转逻辑
-// =========================================================
-let timelast = await env.checkidentity.get("time");
-timelast = timelast ? parseInt(timelast) : 0;
-if ((timenow - timelast) > 86400) {
-    const newToken = crypto.randomUUID();
-    await env.checkidentity.put('time', timenow.toString());
-    await env.checkidentity.put('cookie', newToken);
-    return Astro.redirect("/login");
-}
+
+let message = "";
+let status = ""; // "success" | "error"
 
 
-    let message = "";
-    let status = ""; // "success" | "error"
-
-// =========================================================
-// 2. 鉴权逻辑
-// =========================================================
     const userToken = Astro.cookies.get("auth_token")?.value;
     let serverToken = null;
 
