@@ -36,8 +36,6 @@ const { results } = await db.prepare('SELECT id, maintitle FROM cppOriginIndex')
             </li>
         ))}
 
-        <!-- 新增的添加按钮卡片，接在列表后面 -->
-        <!-- 使用 results.length 作为索引，确保动画延迟排在最后 -->
         <li style={`--i: ${results.length}`}>
             <a href="/add" class="card add-card">
                 <div class="add-content">
@@ -50,7 +48,6 @@ const { results } = await db.prepare('SELECT id, maintitle FROM cppOriginIndex')
     </main>
 
 <style>
-    /* 全局重置与变量 */
     :root {
         --bg-color: #0f172a;
         --card-bg: rgba(30, 41, 59, 0.7);
@@ -77,7 +74,6 @@ const { results } = await db.prepare('SELECT id, maintitle FROM cppOriginIndex')
         position: relative;
     }
 
-    /* 背景氛围光效 */
     .background-glow {
         position: fixed;
         top: -20%;
@@ -91,14 +87,12 @@ const { results } = await db.prepare('SELECT id, maintitle FROM cppOriginIndex')
         pointer-events: none;
     }
 
-    /* 布局容器 */
     .container {
         max-width: 1200px;
         margin: 0 auto;
         padding: 4rem 1.5rem;
     }
 
-    /* 头部设计 */
     header {
         text-align: center;
         margin-bottom: 4rem;

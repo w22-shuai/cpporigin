@@ -11,6 +11,9 @@
 		"enabled": true
 	},
 	"upload_source_maps": true,
+  "vars": {
+		"count": "wangshuai"
+	},
 	"d1_databases": [
 		{
 			"binding": "cpporigin",

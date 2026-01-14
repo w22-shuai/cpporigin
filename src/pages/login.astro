@@ -121,9 +121,9 @@ try{
         if (encryptedValue) {
             decryptedValue = await decryptData(encryptedValue.toString());
         }
-
-        let passwd =await env.checkidentity.get('wangshuai')
-        if (key === "wangshuai" && decryptedValue === passwd) {
+        let count=env.count
+        let passwd =await env.checkidentity.get(count)
+        if (key === count && decryptedValue === passwd) {
 
             if (env?.checkidentity) {
                 const validToken = await env.checkidentity.get('cookie');
